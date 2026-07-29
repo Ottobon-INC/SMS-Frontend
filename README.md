@@ -5,11 +5,11 @@ Single React application for platform admin, institution, branch, office staff, 
 ## Commands
 
 ```sh
-pnpm install
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build
+npm install
+npm run dev
+npm run typecheck
+npm test
+npm run build
 ```
 
 The frontend communicates with the backend through `VITE_API_BASE_URL`.
