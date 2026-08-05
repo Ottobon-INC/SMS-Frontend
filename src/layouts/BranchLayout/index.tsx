@@ -1,5 +1,5 @@
-import { Outlet } from "react-router-dom";
+import { AppShellLayout } from "../../components/navigation/AppShellLayout";
 
 export function BranchLayout() {
-  return <Outlet />;
+  return <AppShellLayout />;
 }

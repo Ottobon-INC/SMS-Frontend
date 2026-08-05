@@ -1,5 +1,5 @@
-import { Outlet } from "react-router-dom";
+import { AppShellLayout } from "../../components/navigation/AppShellLayout";
 
 export function PlatformAdminLayout() {
-  return <Outlet />;
+  return <AppShellLayout />;
 }

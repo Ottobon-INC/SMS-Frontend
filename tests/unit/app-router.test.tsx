@@ -4,12 +4,15 @@ import { AppProviders } from "../../src/app/providers/AppProviders";
 import { AppRouter } from "../../src/app/router/AppRouter";
 
 describe("router shell", () => {
-  it("renders the home placeholder", () => {
+  it("renders the public portal selection page", async () => {
     render(
       <AppProviders>
         <AppRouter />
       </AppProviders>
     );
-    expect(screen.getByText("home")).toBeDefined();
+    expect(await screen.findByText("Institution Admin / Dean")).toBeDefined();
+    expect(screen.getByText("Principal / Campus Admin")).toBeDefined();
+    expect(screen.getByText("Office Staff")).toBeDefined();
+    expect(screen.getByText("Parent / Guardian")).toBeDefined();
   });
 });
