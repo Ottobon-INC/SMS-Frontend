@@ -1,3 +1,3 @@
-import { ModulePlaceholder } from "../../components/ModulePlaceholder";
+import { BranchesPage } from "./pages/BranchesPage";
 
-export const routes = [{ path: "branches", element: <ModulePlaceholder moduleName="branches" /> }];
+export const routes = [{ path: "branches", element: <BranchesPage /> }];

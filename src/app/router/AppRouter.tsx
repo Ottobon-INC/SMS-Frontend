@@ -10,19 +10,19 @@ import { PortalSelectionPage } from "../../modules/authentication/pages/PortalSe
 import { SignupRequestPage } from "../../modules/authentication/pages/SignupRequestPage";
 import { BranchDashboardShellPage } from "../../modules/dashboard/pages/BranchDashboardShellPage";
 import { DashboardShellPage } from "../../modules/dashboard/pages/DashboardShellPage";
-import { InstitutionDashboardShellPage } from "../../modules/institution/pages/InstitutionDashboardShellPage";
+import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
+import { InstitutionSetupPage } from "../../modules/institution/pages/InstitutionSetupPage";
+import { StudentsPage } from "../../modules/students/pages/StudentsPage";
+import { UsersPage } from "../../modules/users/pages/UsersPage";
 import { ParentPortalShellPage } from "../../modules/parent-portal/pages/ParentPortalShellPage";
 import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/PlatformDashboardShellPage";
+import { ExaminationsContainer } from "../../modules/examinations/routes";
 
 const moduleRoutes = [
-  "branches",
-  "users",
   "academic-structure",
-  "students",
   "imports",
   "fees",
   "attendance",
-  "examinations",
   "notifications",
   "reports",
   "audit",
@@ -49,8 +49,13 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <DashboardShellPage /> },
           { path: "/branch-dashboard", element: <BranchDashboardShellPage /> },
           { path: "/platform-admin", element: <PlatformDashboardShellPage /> },
-          { path: "/institution", element: <InstitutionDashboardShellPage /> },
+          { path: "/branches", element: <BranchesPage /> },
+          { path: "/students", element: <StudentsPage /> },
+          { path: "/users", element: <UsersPage /> },
+          { path: "/institution", element: <InstitutionSetupPage /> },
           { path: "/parent-portal", element: <ParentPortalShellPage /> },
+          { path: "/examinations", element: <ExaminationsContainer /> },
+          { path: "/examinations/*", element: <ExaminationsContainer /> },
           ...moduleRoutes.map((moduleName) => ({
             path: `/${moduleName}`,
             element: <ModulePlaceholder moduleName={moduleName} />
