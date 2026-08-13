@@ -111,6 +111,25 @@ export const UsersPage: React.FC = () => {
     return matchesSearch && matchesRole;
   });
 
+  const roleLabels: Record<string, string> = {
+    INSTITUTION_ADMIN: 'Dean',
+    BRANCH_ADMIN: 'Principal',
+    OFFICE_STAFF: 'Office Staff',
+    PARENT_GUARDIAN: 'Parent',
+    SAAS_SUPER_ADMIN: 'Super Admin',
+    PLATFORM: 'Platform',
+    TENANT: 'Unassigned',
+    UNASSIGNED: 'Unassigned',
+  };
+
+  const roleStyles = (roleCode: string) => {
+    if (roleCode === 'INSTITUTION_ADMIN') return 'bg-purple-50 text-purple-800 border-purple-200';
+    if (roleCode === 'BRANCH_ADMIN') return 'bg-teal-50 text-teal-800 border-teal-200';
+    if (roleCode === 'OFFICE_STAFF') return 'bg-sky-50 text-sky-800 border-sky-200';
+    if (roleCode === 'PARENT_GUARDIAN') return 'bg-amber-50 text-amber-800 border-amber-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
   return (
     <div className="space-y-6 p-6">
       {notification && (
@@ -215,15 +234,9 @@ export const UsersPage: React.FC = () => {
                   <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{u.mobile}</td>
                   <td className="py-3 px-4">
                     <span
-                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
-                        u.role === 'INSTITUTION_ADMIN'
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : u.role === 'BRANCH_ADMIN'
-                          ? 'bg-teal-50 text-teal-800 border-teal-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}
+                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${roleStyles(u.role)}`}
                     >
-                      {u.role === 'INSTITUTION_ADMIN' ? 'Dean' : u.role === 'BRANCH_ADMIN' ? 'Principal' : 'Teacher'}
+                      {roleLabels[u.role] || u.role}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-slate-600">{u.branch}</td>

@@ -32,6 +32,8 @@ interface SystemUser {
   name: string;
   email?: string;
   role?: string;
+  branch?: string;
+  status?: string;
 }
 
 export const BranchesPage: React.FC = () => {
@@ -68,7 +70,7 @@ export const BranchesPage: React.FC = () => {
   // Assign Principal Modal State
   const [showAssignPrincipalModal, setShowAssignPrincipalModal] = useState<boolean>(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
-  const [principalName, setPrincipalName] = useState<string>('');
+  const [principalUserId, setPrincipalUserId] = useState<string>('');
   
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -95,7 +97,7 @@ export const BranchesPage: React.FC = () => {
         setSystemUsers(data);
         if (data.length > 0) {
           setContactPersonName(data[0].name);
-          setPrincipalName(data[0].name);
+          setPrincipalUserId(data[0].id);
         }
       }
     } catch (err) {
@@ -122,6 +124,20 @@ export const BranchesPage: React.FC = () => {
       setModalError('Campus Name is required on Tab 1 (Basic Info)!');
       setActiveTab('basic');
       return;
+    }
+
+    const selectedContactUser = systemUsers.find((u) => u.name === contactPersonName);
+    const previewBranch: Branch = {
+      id: 'new-branch-preview',
+      code: branchCode.trim().toUpperCase(),
+      name: branchName.trim(),
+      status: 'DRAFT',
+    };
+    if (selectedContactUser && isAssignedElsewhere(selectedContactUser, previewBranch)) {
+      const confirmed = window.confirm(
+        `${selectedContactUser.name} is already assigned to ${getUserAssignment(selectedContactUser)}. Assigning this user to ${branchName.trim()} will move their campus assignment. Do you want to proceed?`
+      );
+      if (!confirmed) return;
     }
 
     setSubmitting(true);
@@ -171,22 +187,32 @@ export const BranchesPage: React.FC = () => {
 
   const handleAssignPrincipal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBranch || !principalName.trim()) return;
+    if (!selectedBranch || !principalUserId) return;
+
+    const selectedUser = systemUsers.find((u) => u.id === principalUserId);
+    if (!selectedUser) return;
+
+    if (isAssignedElsewhere(selectedUser, selectedBranch)) {
+      const confirmed = window.confirm(
+        `${selectedUser.name} is already assigned to ${selectedUser.branch}. Assigning this user to ${selectedBranch.name} will move their campus assignment. Do you want to proceed?`
+      );
+      if (!confirmed) return;
+    }
 
     setBranches((prev) =>
       prev.map((b) =>
         b.id === selectedBranch.id
           ? {
               ...b,
-              contact_person: principalName.trim(),
-              contact_data: { ...(b.contact_data || {}), contact_person_name: principalName.trim() },
+              contact_person: selectedUser.name,
+              contact_data: { ...(b.contact_data || {}), contact_person_name: selectedUser.name },
             }
           : b
       )
     );
 
     setShowAssignPrincipalModal(false);
-    setNotification(`Principal "${principalName.trim()}" assigned to ${selectedBranch.name}!`);
+    setNotification(`Principal "${selectedUser.name}" assigned to ${selectedBranch.name}!`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -204,6 +230,7 @@ export const BranchesPage: React.FC = () => {
     setModalError(null);
     if (systemUsers.length > 0) {
       setContactPersonName(systemUsers[0].name);
+      setPrincipalUserId(systemUsers[0].id);
     }
     setActiveTab('basic');
   };
@@ -212,6 +239,91 @@ export const BranchesPage: React.FC = () => {
     (b) =>
       b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const roleLabels: Record<string, string> = {
+    INSTITUTION_ADMIN: 'Institution Admin / Dean',
+    BRANCH_ADMIN: 'Principal / Campus Admin',
+    OFFICE_STAFF: 'Office Staff',
+    TEACHER: 'Teacher',
+    PARENT_GUARDIAN: 'Parent / Guardian',
+  };
+
+  const principalCandidates = systemUsers.filter(
+    (u) => (u.status ?? 'ACTIVE') === 'ACTIVE' && u.role !== 'INSTITUTION_ADMIN' && u.role !== 'PARENT_GUARDIAN'
+  );
+
+  const branchNames = branches.map((b) => b.name);
+
+  const getUserAssignment = (user: SystemUser) => {
+    const matchedBranch = user.branch && branchNames.includes(user.branch) ? user.branch : '';
+    if (matchedBranch) return matchedBranch;
+    const contactBranch = branches.find((b) => b.contact_person === user.name);
+    return contactBranch?.name || '';
+  };
+
+  const getAssignmentLabel = (user: SystemUser, targetBranch?: Branch | null) => {
+    const assignedBranchName = getUserAssignment(user);
+    if (!assignedBranchName) return 'Unassigned';
+    if (targetBranch && assignedBranchName === targetBranch.name) return `Assigned to this campus: ${assignedBranchName}`;
+    return `Assigned elsewhere: ${assignedBranchName}`;
+  };
+
+  const isAssignedElsewhere = (user: SystemUser, targetBranch?: Branch | null) => {
+    const assignedBranchName = getUserAssignment(user);
+    return Boolean(targetBranch && assignedBranchName && assignedBranchName !== targetBranch.name);
+  };
+
+  const renderUserPicker = (
+    selectedUserId: string,
+    onSelectUser: (user: SystemUser) => void,
+    targetBranch?: Branch | null
+  ) => (
+    <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-2 space-y-2">
+      {principalCandidates.length === 0 ? (
+        <div className="p-3 text-[11px] font-semibold text-slate-500">No registered users available.</div>
+      ) : (
+        principalCandidates.map((u) => {
+          const isSelected = selectedUserId === u.id;
+          const assignedBranchName = getUserAssignment(u);
+          const assignedElsewhere = isAssignedElsewhere(u, targetBranch);
+          const assignedToTarget = Boolean(targetBranch && assignedBranchName === targetBranch.name);
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onSelectUser(u)}
+              className={`w-full text-left rounded-xl border p-3 transition-colors ${
+                isSelected ? 'border-teal-500 bg-white shadow-sm ring-2 ring-teal-100' : 'border-slate-200 bg-white hover:border-teal-200'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 leading-5 break-words">{u.name}</p>
+                  <p className="text-[11px] font-medium text-slate-500 leading-4">
+                    {roleLabels[u.role || ''] || u.role || 'User'}{u.email ? ` - ${u.email}` : ''}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500 leading-4 break-words">{getAssignmentLabel(u, targetBranch)}</p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                    !assignedBranchName
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : assignedElsewhere
+                      ? 'bg-amber-100 text-amber-700'
+                      : assignedToTarget
+                      ? 'bg-teal-100 text-teal-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {!assignedBranchName ? 'Unassigned' : assignedToTarget ? 'This Campus' : 'Assigned'}
+                </span>
+              </div>
+            </button>
+          );
+        })
+      )}
+    </div>
   );
 
   return (
@@ -335,7 +447,8 @@ export const BranchesPage: React.FC = () => {
                 <button
                   onClick={() => {
                     setSelectedBranch(b);
-                    setPrincipalName(b.contact_person || (systemUsers[0]?.name || ''));
+                    const assignedUser = systemUsers.find((u) => u.name === b.contact_person);
+                    setPrincipalUserId(assignedUser?.id || systemUsers[0]?.id || '');
                     setShowAssignPrincipalModal(true);
                   }}
                   className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
@@ -542,21 +655,13 @@ export const BranchesPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Assign Registered System User *</label>
-                    {systemUsers.length > 0 ? (
-                      <select
-                        value={contactPersonName}
-                        onChange={(e) => setContactPersonName(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-teal-300 rounded-xl font-bold text-slate-800 outline-none"
-                      >
-                        {systemUsers.map((u) => (
-                          <option key={u.id} value={u.name}>
-                            {u.name} ({u.role || 'User'})
-                          </option>
-                        ))}
-                      </select>
+                    {systemUsers.length > 0 ? renderUserPicker(
+                      principalCandidates.find((u) => u.name === contactPersonName)?.id || '',
+                      (user) => setContactPersonName(user.name),
+                      branchName.trim() ? { id: 'new-branch-preview', code: branchCode, name: branchName.trim(), status: 'DRAFT' } : null
                     ) : (
                       <input
                         type="text"
@@ -565,6 +670,11 @@ export const BranchesPage: React.FC = () => {
                         onChange={(e) => setContactPersonName(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
                       />
+                    )}
+                    {contactPersonName && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
+                        Selected admin contact: <span className="font-bold text-slate-900">{contactPersonName}</span>
+                      </div>
                     )}
                   </div>
                   <div>
@@ -644,28 +754,31 @@ export const BranchesPage: React.FC = () => {
             <form onSubmit={handleAssignPrincipal} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Select Registered System User *</label>
-                {systemUsers.length > 0 ? (
-                  <select
-                    value={principalName}
-                    onChange={(e) => setPrincipalName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-teal-300 rounded-xl font-bold text-slate-800 outline-none"
-                  >
-                    {systemUsers.map((u) => (
-                      <option key={u.id} value={u.name}>
-                        {u.name} ({u.role || 'User'}) - {u.email || ''}
-                      </option>
-                    ))}
-                  </select>
+                {systemUsers.length > 0 ? renderUserPicker(
+                  principalUserId,
+                  (user) => setPrincipalUserId(user.id),
+                  selectedBranch
                 ) : (
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Dr. K. V. Rao"
-                    value={principalName}
-                    onChange={(e) => setPrincipalName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-semibold text-amber-800">
+                    Create or load a registered system user before assigning a campus principal.
+                  </div>
                 )}
+                {principalUserId && (() => {
+                  const user = systemUsers.find((u) => u.id === principalUserId);
+                  if (!user) return null;
+                  const assignedElsewhere = isAssignedElsewhere(user, selectedBranch);
+                  return (
+                    <div className={`mt-3 rounded-xl border p-3 text-[11px] font-medium leading-5 ${
+                      assignedElsewhere
+                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    }`}>
+                      {assignedElsewhere
+                        ? `${user.name} is already assigned to ${getUserAssignment(user)}. Confirming will reassign them to ${selectedBranch.name}.`
+                        : `${user.name} is ready to assign to ${selectedBranch.name}.`}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex gap-3 pt-3 font-bold">
@@ -676,7 +789,11 @@ export const BranchesPage: React.FC = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl shadow-xs">
+                <button
+                  type="submit"
+                  disabled={!principalUserId}
+                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   Assign Principal
                 </button>
               </div>

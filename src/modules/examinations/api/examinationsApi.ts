@@ -2,6 +2,115 @@ import { Exam, ExamSubject, StudentExamRecord } from '../types';
 
 const API_BASE_URL = '/api/v1/examinations';
 
+type AcademicYear = {
+  id: string;
+  code: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  status: string;
+  isDefault: boolean;
+};
+
+type ApiExamSubject = {
+  id?: string;
+  exam_id?: string;
+  subject_id: string;
+  subject_name: string;
+  subject_code: string;
+  maximum_marks: number;
+  pass_marks: number;
+};
+
+type ApiExam = {
+  id: string;
+  scope?: Exam['scope'];
+  branch_id?: string;
+  branch_ids?: string[];
+  excluded_branch_ids?: string[];
+  exemption_reasons?: Record<string, string>;
+  academic_year_id: string;
+  programme_id: string;
+  programme_ids?: string[];
+  name: string;
+  type: string;
+  exam_date: string;
+  marks_entry_deadline?: string;
+  status: Exam['status'];
+  return_reason?: string;
+  published_at?: string;
+  published_by?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  exam_subjects?: ApiExamSubject[];
+};
+
+function mapExamSubjectFromApi(subject: ApiExamSubject): ExamSubject {
+  return {
+    id: subject.id ?? `${subject.exam_id ?? 'exam'}-${subject.subject_id}`,
+    examId: subject.exam_id ?? '',
+    subjectId: subject.subject_id,
+    subjectName: subject.subject_name,
+    subjectCode: subject.subject_code,
+    maximumMarks: subject.maximum_marks,
+    passMarks: subject.pass_marks,
+  };
+}
+
+function mapExamFromApi(exam: ApiExam): Exam {
+  return {
+    id: exam.id,
+    scope: exam.scope,
+    branchId: exam.branch_id,
+    branchIds: exam.branch_ids,
+    excludedBranchIds: exam.excluded_branch_ids,
+    exemptionReasons: exam.exemption_reasons,
+    academicYearId: exam.academic_year_id,
+    programmeId: exam.programme_id,
+    programmeIds: exam.programme_ids,
+    name: exam.name,
+    type: exam.type,
+    examDate: exam.exam_date,
+    marksEntryDeadline: exam.marks_entry_deadline,
+    status: exam.status,
+    returnReason: exam.return_reason,
+    publishedAt: exam.published_at,
+    publishedBy: exam.published_by,
+    createdBy: exam.created_by,
+    createdAt: exam.created_at,
+    updatedAt: exam.updated_at,
+    examSubjects: exam.exam_subjects?.map(mapExamSubjectFromApi) ?? [],
+  };
+}
+
+function mapExamSubjectToApi(subject: Partial<ExamSubject>): Partial<ApiExamSubject> {
+  return {
+    subject_id: subject.subjectId,
+    subject_name: subject.subjectName,
+    subject_code: subject.subjectCode,
+    maximum_marks: subject.maximumMarks,
+    pass_marks: subject.passMarks,
+  };
+}
+
+function mapExamToApi(exam: Partial<Exam>) {
+  return {
+    name: exam.name,
+    type: exam.type,
+    scope: exam.scope,
+    branch_id: exam.branchId,
+    branch_ids: exam.branchIds,
+    excluded_branch_ids: exam.excludedBranchIds,
+    exemption_reasons: exam.exemptionReasons,
+    academic_year_id: exam.academicYearId,
+    programme_id: exam.programmeId,
+    programme_ids: exam.programmeIds,
+    exam_date: exam.examDate,
+    marks_entry_deadline: exam.marksEntryDeadline,
+  };
+}
+
 export const examinationsApi = {
   async getExams(branchId?: string, status?: string): Promise<Exam[]> {
     try {
@@ -11,7 +120,11 @@ export const examinationsApi = {
 
       const res = await fetch(`${API_BASE_URL}?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch exams');
-      return await res.json();
+      const data = (await res.json()) as ApiExam[];
+      const mapped = data.map(mapExamFromApi);
+      const local = localStorage.getItem('sms_exams_fallback');
+      if (mapped.length === 0 && local) return JSON.parse(local) as Exam[];
+      return mapped;
     } catch (err) {
       console.warn('API connection failed, using local storage fallback:', err);
       const local = localStorage.getItem('sms_exams_fallback');
@@ -24,10 +137,12 @@ export const examinationsApi = {
       const res = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...exam, exam_subjects: examSubjects }),
+        body: JSON.stringify({ ...mapExamToApi(exam), exam_subjects: examSubjects.map(mapExamSubjectToApi) }),
       });
       if (!res.ok) throw new Error('Failed to create exam');
-      return await res.json();
+      const created = mapExamFromApi((await res.json()) as ApiExam);
+      localStorage.removeItem('sms_exams_fallback');
+      return created;
     } catch (err) {
       console.warn('API creation failed, saving locally:', err);
       const newExam = {
@@ -128,6 +243,11 @@ export const examinationsApi = {
       localStorage.setItem(`sms_records_${examId}_${sectionId}`, JSON.stringify(records));
       return records as StudentExamRecord[];
     }
+  },
+  async getAcademicYears(): Promise<AcademicYear[]> {
+    const res = await fetch('/api/v1/academic-structure/academic-years');
+    if (!res.ok) throw new Error('Failed to fetch academic years');
+    return await res.json();
   },
   async getBranches(): Promise<{ id: string; name: string; code: string }[]> {
     try {

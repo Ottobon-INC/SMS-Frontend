@@ -21,6 +21,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   const [exemptReason, setExemptReason] = useState('');
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('ALL');
+  const [academicYearId, setAcademicYearId] = useState<string>('');
 
   const [branches, setBranches] = useState<Branch[]>([
     { id: '11111111-1111-1111-1111-111111111111', name: 'Hyderabad Main Campus', code: 'HYD-MAIN' },
@@ -44,13 +45,24 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   // Dynamic Master Data Loading from Live Backend APIs
   useEffect(() => {
     examinationsApi.getBranches().then((b) => {
-      if (b && b.length > 0) setBranches(b);
+      if (b && b.length > 0) {
+        setBranches(b);
+        setSelectedBranchId((current) => b.some((branch) => branch.id === current) ? current : b[0].id);
+        setSelectedBranchIds((current) => current.length > 0 && current.every((id) => b.some((branch) => branch.id === id)) ? current : [b[0].id]);
+      }
     });
     examinationsApi.getProgrammes().then((p) => {
-      if (p && p.length > 0) setProgrammes(p);
+      if (p && p.length > 0) {
+        setProgrammes(p);
+        setSelectedProgrammeIds((current) => current.length > 0 && p.some((programme) => programme.id === current[0]) ? current : [p[0].id]);
+      }
     });
     examinationsApi.getSubjects().then((s) => {
       if (s && s.length > 0) setAllSubjects(s);
+    });
+    examinationsApi.getAcademicYears().then((years) => {
+      const activeYear = years.find((year) => year.isDefault) ?? years[0];
+      if (activeYear) setAcademicYearId(activeYear.id);
     });
   }, []);
 
@@ -116,6 +128,10 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
     e.preventDefault();
     setOverlapError(null);
     if (!examName.trim()) return;
+    if (!academicYearId) {
+      setOverlapError('Academic year is still loading. Please wait and try again.');
+      return;
+    }
 
     const targetBranchIds =
       examScope === 'ALL_BRANCHES'
@@ -160,7 +176,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
       scope: examScope,
       branchId: examScope === 'SINGLE_BRANCH' ? selectedBranchId : undefined,
       branchIds: targetBranchIds,
-      academicYearId: 'ay-2026-2027',
+      academicYearId,
       programmeId: selectedProgrammeIds[0] || 'prog-mpc',
       programmeIds: selectedProgrammeIds,
       examDate: examDate,
