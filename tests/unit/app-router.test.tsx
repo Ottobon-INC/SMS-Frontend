@@ -10,9 +10,10 @@ describe("router shell", () => {
         <AppRouter />
       </AppProviders>
     );
-    expect(await screen.findByText("Institution Admin / Dean")).toBeDefined();
-    expect(screen.getByText("Principal / Campus Admin")).toBeDefined();
+    expect(await screen.findByText("Student Operations Hub")).toBeDefined();
+    expect(screen.getByText("Institution Admin")).toBeDefined();
+    expect(screen.getByText("Campus Principal")).toBeDefined();
     expect(screen.getByText("Office Staff")).toBeDefined();
-    expect(screen.getByText("Parent / Guardian")).toBeDefined();
+    expect(screen.getByText("Parent Portal")).toBeDefined();
   });
 });
