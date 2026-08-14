@@ -60,7 +60,7 @@ const router = createBrowserRouter([
           protectedPage("/dashboard", <DashboardShellPage />, { module: "dashboard" }),
           protectedPage("/branch-dashboard", <BranchDashboardShellPage />, { module: "dashboard" }),
           protectedPage("/platform-admin", <PlatformDashboardShellPage />, { module: "platform-admin" }),
-          protectedPage("/branches", <BranchesPage />, { module: "branches", permission: "branch.manage" }),
+          protectedPage("/branches", <BranchesPage />, { module: "branches", permission: "branch.view" }),
           protectedPage("/students", <StudentsPage />, { module: "students", permission: "student.view" }),
           protectedPage("/users", <UsersPage />, { module: "users", permission: "user.view" }),
           protectedPage("/institution", <InstitutionSetupPage />, { module: "institution", permission: "institution.view" }),

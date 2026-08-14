@@ -11,9 +11,15 @@ export const navigationItems: NavigationItem[] = [
   { label: "Platform Admin", route: "/platform-admin", module: "platform-admin", contextTypes: ["PLATFORM"] },
   // Institution & Branches: TENANT/PLATFORM only (Dean & Platform Admin) — hidden from Principal, Office Staff, Parent
   { label: "Institution", route: "/institution", module: "institution", permissions: ["institution.view"], contextTypes: ["TENANT", "PLATFORM"] },
-  { label: "Branches", route: "/branches", module: "branches", permissions: ["branch.manage"], contextTypes: ["TENANT", "PLATFORM"] },
+  {
+    label: "Branches",
+    route: "/branches",
+    module: "branches",
+    permissions: ["branch.view", "branch.create", "branch.update"],
+    contextTypes: ["TENANT", "PLATFORM"]
+  },
   // Users: Dean (TENANT) and Principal (BRANCH) can manage users; Office Staff and Parents cannot
-  { label: "Users", route: "/users", module: "users", permissions: ["user.manage"] },
+  { label: "Users", route: "/users", module: "users", permissions: ["user.view", "user.create", "role.assign"] },
   // Academic Structure: Dean, Principal, Office Staff can view; Parent cannot
   {
     label: "Academic Structure",
