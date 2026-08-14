@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Shield, CheckCircle2, X, RefreshCw, Phone, Mail, Building, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, Search, CheckCircle2, X, RefreshCw, ShieldCheck, AlertCircle, Lock } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface UserItem {
   id: string;
@@ -12,11 +14,21 @@ interface UserItem {
 }
 
 export const UsersPage: React.FC = () => {
+  const { activeContext, availableContexts } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+
+  const isPlatformAdmin = activeContext?.scope_type === 'PLATFORM';
+  const isDean = activeContext?.role_codes.includes('INSTITUTION_ADMIN') || activeContext?.scope_type === 'TENANT';
+  const isPrincipal = activeContext?.role_codes.includes('BRANCH_ADMIN') && activeContext?.scope_type === 'BRANCH';
+
+  const userBranchName =
+    availableContexts.find((c) => c.assignment_id === activeContext?.assignment_id)?.branch?.name ||
+    'Main Campus';
 
   // 2-Tab Modal State
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -27,10 +39,19 @@ export const UsersPage: React.FC = () => {
   const [fullName, setFullName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
-  const [role, setRole] = useState<string>('BRANCH_ADMIN');
-  const [branch, setBranch] = useState<string>('Hyderabad Main Campus');
+  const [role, setRole] = useState<string>(isPrincipal ? 'OFFICE_STAFF' : 'BRANCH_ADMIN');
+  const [branch, setBranch] = useState<string>(isPrincipal ? userBranchName : 'Main Campus');
 
   const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isPrincipal) {
+      setRole('OFFICE_STAFF');
+      setBranch(userBranchName);
+    } else if (isDean) {
+      setRole('BRANCH_ADMIN');
+    }
+  }, [isPrincipal, isDean, userBranchName]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -47,8 +68,24 @@ export const UsersPage: React.FC = () => {
     }
   };
 
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('/api/v1/branches');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableBranches(data.map((b: any) => ({ id: b.id, name: b.name || b.displayName })));
+        if (data.length > 0) {
+          setBranch(data[0].name || data[0].displayName);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch branches for selection:', err);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchBranches();
   }, []);
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -83,7 +120,6 @@ export const UsersPage: React.FC = () => {
 
       if (res.ok) {
         const newUser = await res.json();
-        setUsers((prev) => [newUser, ...prev]);
         setShowAddModal(false);
         setFullName('');
         setEmail('');
@@ -91,6 +127,8 @@ export const UsersPage: React.FC = () => {
         setModalError(null);
         setNotification(`User "${newUser.name}" created with role ${newUser.role}!`);
         setTimeout(() => setNotification(null), 4000);
+        // Re-fetch the full list from server so role/branch are shown correctly
+        await fetchUsers();
       } else {
         const errText = await res.text();
         setModalError(`Failed to create user: ${errText || res.statusText}`);
@@ -108,8 +146,28 @@ export const UsersPage: React.FC = () => {
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesBranch = !isPrincipal || u.branch.toLowerCase().includes(userBranchName.toLowerCase()) || u.branch === 'Unassigned';
+    return matchesSearch && matchesRole && matchesBranch;
   });
+
+  const roleLabels: Record<string, string> = {
+    INSTITUTION_ADMIN: 'Dean',
+    BRANCH_ADMIN: 'Principal',
+    OFFICE_STAFF: 'Office Staff',
+    PARENT_GUARDIAN: 'Parent',
+    SAAS_SUPER_ADMIN: 'Super Admin',
+    PLATFORM: 'Platform',
+    TENANT: 'Unassigned',
+    UNASSIGNED: 'Unassigned',
+  };
+
+  const roleStyles = (roleCode: string) => {
+    if (roleCode === 'INSTITUTION_ADMIN') return 'bg-purple-50 text-purple-800 border-purple-200';
+    if (roleCode === 'BRANCH_ADMIN') return 'bg-teal-50 text-teal-800 border-teal-200';
+    if (roleCode === 'OFFICE_STAFF') return 'bg-sky-50 text-sky-800 border-sky-200';
+    if (roleCode === 'PARENT_GUARDIAN') return 'bg-amber-50 text-amber-800 border-amber-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -179,7 +237,7 @@ export const UsersPage: React.FC = () => {
             <option value="ALL">All Roles</option>
             <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>
             <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>
-            <option value="TEACHER">Teacher / Staff</option>
+            <option value="OFFICE_STAFF">Office Staff</option>
           </select>
         </div>
       </div>
@@ -215,15 +273,9 @@ export const UsersPage: React.FC = () => {
                   <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{u.mobile}</td>
                   <td className="py-3 px-4">
                     <span
-                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
-                        u.role === 'INSTITUTION_ADMIN'
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : u.role === 'BRANCH_ADMIN'
-                          ? 'bg-teal-50 text-teal-800 border-teal-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}
+                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${roleStyles(u.role)}`}
                     >
-                      {u.role === 'INSTITUTION_ADMIN' ? 'Dean' : u.role === 'BRANCH_ADMIN' ? 'Principal' : 'Teacher'}
+                      {roleLabels[u.role] || u.role}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-slate-600">{u.branch}</td>
@@ -327,25 +379,40 @@ export const UsersPage: React.FC = () => {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
                   >
-                    <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>
-                    <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>
-                    <option value="TEACHER">Teacher / Subject Faculty</option>
+                    {isPlatformAdmin && <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>}
+                    {!isPrincipal && <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>}
+                    <option value="OFFICE_STAFF">Office Staff</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Primary Campus Branch</label>
-                  <select
-                    value={branch}
-                    onChange={(e) => setBranch(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                  >
-                    <option value="Hyderabad Main Campus">Hyderabad Main Campus</option>
-                    <option value="Vijayawada City Campus">Vijayawada City Campus</option>
-                    <option value="Visakhapatnam Campus">Visakhapatnam Campus</option>
-                  </select>
+                  {isPrincipal ? (
+                    <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-xs font-bold text-slate-700">
+                      <span>{userBranchName}</span>
+                      <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Locked to Your Campus
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={branch}
+                      onChange={(e) => setBranch(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
+                    >
+                      {availableBranches.length > 0 ? (
+                        availableBranches.map((b) => (
+                          <option key={b.id} value={b.name}>
+                            {b.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="Main Campus">Main Campus</option>
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
 

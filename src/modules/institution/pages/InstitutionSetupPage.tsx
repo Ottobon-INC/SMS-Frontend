@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building, GitBranch, BookOpen, Plus, X, CheckCircle2, ShieldCheck, Layers, BookMarked, Award, RefreshCw } from 'lucide-react';
+import { BookOpen, X, CheckCircle2, ShieldCheck, Layers, BookMarked, RefreshCw } from 'lucide-react';
 
 interface Subject {
   id: string;

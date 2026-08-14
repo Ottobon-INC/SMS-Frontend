@@ -1,3 +1,3 @@
-import { ModulePlaceholder } from "../../components/ModulePlaceholder";
+import { AcademicStructurePage } from "./pages/AcademicStructurePage";
 
-export const routes = [{ path: "academic-structure", element: <ModulePlaceholder moduleName="academic-structure" /> }];
+export const routes = [{ path: "academic-structure", element: <AcademicStructurePage /> }];

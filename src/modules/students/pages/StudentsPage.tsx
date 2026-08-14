@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Filter, ShieldCheck, CheckCircle2, X, RefreshCw, GraduationCap, Phone, Mail, HeartPulse, User, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, Phone, AlertCircle } from 'lucide-react';
 
 interface Student {
   id: string;

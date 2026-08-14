@@ -16,10 +16,6 @@ export function LoginPage({ platform = false }: { platform?: boolean }) {
   const portal = platform ? "platform" : ((params.get("portal") ?? "institution") as PortalKey);
 
   if (!validPortals.has(portal)) return <Navigate to="/" replace />;
-  if (auth.isAuthenticated && auth.activeContext != null) {
-    return <Navigate to={getDashboardPathForActiveContext(auth.activeContext)} replace />;
-  }
-
   const definition = portalDefinitions[portal];
 
   async function handleSubmit(email: string, password: string) {

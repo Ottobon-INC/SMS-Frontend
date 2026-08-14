@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, StudentExamRecord } from '../types';
-import { Save, ArrowLeft, CheckCircle2, X, AlertTriangle, FileText, Check, Loader2 } from 'lucide-react';
+import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2 } from 'lucide-react';
 
 interface StudentItem {
   id: string;
@@ -13,7 +13,7 @@ interface StudentItem {
 export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
-  const [selectedSectionId, setSelectedSectionId] = useState<string>('sec-mpc-a');
+  const [selectedSectionId] = useState<string>('sec-mpc-a');
   const [notification, setNotification] = useState<string | null>(null);
 
   const [recordsMap, setRecordsMap] = useState<Record<string, StudentExamRecord>>({});

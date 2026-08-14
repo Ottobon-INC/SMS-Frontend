@@ -12,6 +12,7 @@ import { BranchDashboardShellPage } from "../../modules/dashboard/pages/BranchDa
 import { DashboardShellPage } from "../../modules/dashboard/pages/DashboardShellPage";
 import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
 import { InstitutionSetupPage } from "../../modules/institution/pages/InstitutionSetupPage";
+import { AcademicStructurePage } from "../../modules/academic-structure/pages/AcademicStructurePage";
 import { StudentsPage } from "../../modules/students/pages/StudentsPage";
 import { UsersPage } from "../../modules/users/pages/UsersPage";
 import { ParentPortalShellPage } from "../../modules/parent-portal/pages/ParentPortalShellPage";
@@ -19,7 +20,6 @@ import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/P
 import { ExaminationsContainer } from "../../modules/examinations/routes";
 
 const moduleRoutes = [
-  "academic-structure",
   "imports",
   "fees",
   "attendance",
@@ -28,6 +28,17 @@ const moduleRoutes = [
   "audit",
   "support"
 ];
+
+function protectedPage(
+  path: string,
+  element: React.ReactNode,
+  options: { module?: string; permission?: string } = {}
+) {
+  return {
+    element: <ProtectedRoute module={options.module} permission={options.permission} />,
+    children: [{ path, element }]
+  };
+}
 
 const router = createBrowserRouter([
   {
@@ -46,19 +57,41 @@ const router = createBrowserRouter([
       {
         element: <AppShellLayout />,
         children: [
-          { path: "/dashboard", element: <DashboardShellPage /> },
-          { path: "/branch-dashboard", element: <BranchDashboardShellPage /> },
-          { path: "/platform-admin", element: <PlatformDashboardShellPage /> },
-          { path: "/branches", element: <BranchesPage /> },
-          { path: "/students", element: <StudentsPage /> },
-          { path: "/users", element: <UsersPage /> },
-          { path: "/institution", element: <InstitutionSetupPage /> },
-          { path: "/parent-portal", element: <ParentPortalShellPage /> },
-          { path: "/examinations", element: <ExaminationsContainer /> },
-          { path: "/examinations/*", element: <ExaminationsContainer /> },
+          protectedPage("/dashboard", <DashboardShellPage />, { module: "dashboard" }),
+          protectedPage("/branch-dashboard", <BranchDashboardShellPage />, { module: "dashboard" }),
+          protectedPage("/platform-admin", <PlatformDashboardShellPage />, { module: "platform-admin" }),
+          protectedPage("/branches", <BranchesPage />, { module: "branches", permission: "branch.manage" }),
+          protectedPage("/students", <StudentsPage />, { module: "students", permission: "student.view" }),
+          protectedPage("/users", <UsersPage />, { module: "users", permission: "user.view" }),
+          protectedPage("/institution", <InstitutionSetupPage />, { module: "institution", permission: "institution.view" }),
+          protectedPage("/academic-structure", <AcademicStructurePage />, { module: "academic-structure", permission: "academic_structure.view" }),
+          protectedPage("/parent-portal", <ParentPortalShellPage />, { module: "parent-portal", permission: "parent.child_view" }),
+          protectedPage("/examinations", <ExaminationsContainer />, { module: "examinations", permission: "exam.view" }),
+          protectedPage("/examinations/*", <ExaminationsContainer />, { module: "examinations", permission: "exam.view" }),
           ...moduleRoutes.map((moduleName) => ({
-            path: `/${moduleName}`,
-            element: <ModulePlaceholder moduleName={moduleName} />
+            element: (
+              <ProtectedRoute
+                module={moduleName}
+                permission={
+                  moduleName === "academic-structure"
+                    ? "academic_structure.view"
+                    : moduleName === "imports"
+                      ? "import.view"
+                      : moduleName === "fees"
+                        ? "fee.view"
+                        : moduleName === "attendance"
+                          ? "attendance.view"
+                          : moduleName === "notifications"
+                            ? "notification.view"
+                            : moduleName === "reports"
+                              ? "report.branch_view"
+                              : moduleName === "audit"
+                                ? "audit.view"
+                                : undefined
+                }
+              />
+            ),
+            children: [{ path: `/${moduleName}`, element: <ModulePlaceholder moduleName={moduleName} /> }]
           }))
         ]
       }
