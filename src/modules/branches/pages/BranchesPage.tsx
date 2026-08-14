@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, MapPin, Phone, Mail, ShieldCheck, CheckCircle2, X, RefreshCw, UserCheck, Globe, Layers, AlertCircle } from 'lucide-react';
+import { Building2, Plus, Search, MapPin, Phone, Mail, ShieldCheck, CheckCircle2, X, RefreshCw, UserCheck, Globe, Layers, AlertCircle, Lock } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface Branch {
   id: string;
@@ -11,6 +12,7 @@ interface Branch {
   phone?: string;
   email?: string;
   address?: string;
+  contact?: any;
   contact_person?: string;
   address_data?: {
     street?: string;
@@ -37,11 +39,18 @@ interface SystemUser {
 }
 
 export const BranchesPage: React.FC = () => {
+  const { activeContext } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const isDeanOrAdmin =
+    activeContext?.role_codes.includes('INSTITUTION_ADMIN') ||
+    activeContext?.role_codes.includes('PLATFORM_ADMIN') ||
+    activeContext?.scope_type === 'TENANT' ||
+    activeContext?.scope_type === 'PLATFORM';
   
   // Modal state for Add Branch
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -126,20 +135,6 @@ export const BranchesPage: React.FC = () => {
       return;
     }
 
-    const selectedContactUser = systemUsers.find((u) => u.name === contactPersonName);
-    const previewBranch: Branch = {
-      id: 'new-branch-preview',
-      code: branchCode.trim().toUpperCase(),
-      name: branchName.trim(),
-      status: 'DRAFT',
-    };
-    if (selectedContactUser && isAssignedElsewhere(selectedContactUser, previewBranch)) {
-      const confirmed = window.confirm(
-        `${selectedContactUser.name} is already assigned to ${getUserAssignment(selectedContactUser)}. Assigning this user to ${branchName.trim()} will move their campus assignment. Do you want to proceed?`
-      );
-      if (!confirmed) return;
-    }
-
     setSubmitting(true);
     try {
       const res = await fetch('/api/v1/branches', {
@@ -160,8 +155,8 @@ export const BranchesPage: React.FC = () => {
           contact: {
             primary_phone: phone || '+91 98765 43210',
             email: email || 'branch@svic.edu',
-            contact_person_name: contactPersonName || (systemUsers[0]?.name || 'Campus Principal'),
-            contact_person_role: contactPersonRole,
+            contact_person_name: contactPersonName || 'Unassigned',
+            contact_person_role: contactPersonRole || 'Principal',
           },
         }),
       });
@@ -237,8 +232,8 @@ export const BranchesPage: React.FC = () => {
 
   const filteredBranches = branches.filter(
     (b) =>
-      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.code.toLowerCase().includes(searchQuery.toLowerCase())
+      ((b.name || (b as any).displayName || '') as string).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ((b.code || (b as any).branchCode || '') as string).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const roleLabels: Record<string, string> = {
@@ -359,15 +354,21 @@ export const BranchesPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowAddModal(true);
-            }}
-            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
-          >
-            <Plus className="w-4 h-4" /> Add Campus Branch
-          </button>
+          {isDeanOrAdmin ? (
+            <button
+              onClick={() => {
+                resetForm();
+                setShowAddModal(true);
+              }}
+              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+            >
+              <Plus className="w-4 h-4" /> Add Campus Branch
+            </button>
+          ) : (
+            <div className="px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-[11px] font-semibold flex items-center gap-1.5" title="Branch creation is restricted to Institution Administrators (Deans)">
+              <Lock className="w-3.5 h-3.5 text-slate-400" /> Dean / Institution Admin Only
+            </div>
+          )}
         </div>
       </div>
 
@@ -427,19 +428,37 @@ export const BranchesPage: React.FC = () => {
               <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100 font-medium">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{b.address || 'Telangana / AP Region'}</span>
+                  <span className="truncate">
+                    {typeof b.address === 'string'
+                      ? b.address
+                      : b.address && typeof b.address === 'object'
+                      ? [ (b.address as any).line1, (b.address as any).city, (b.address as any).state ].filter(Boolean).join(', ')
+                      : 'Telangana / AP Region'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{b.phone || '+91 98765 43210'}</span>
+                  <span>
+                    {typeof b.phone === 'string'
+                      ? b.phone
+                      : (b.contact && typeof (b.contact as any).phone === 'string')
+                      ? (b.contact as any).phone
+                      : '+91 98765 43210'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{b.email || 'branch@svic.edu'}</span>
+                  <span className="truncate">
+                    {typeof b.email === 'string'
+                      ? b.email
+                      : (b.contact && typeof (b.contact as any).email === 'string')
+                      ? (b.contact as any).email
+                      : 'branch@svic.edu'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <UserCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span className="text-slate-800 font-bold">Assigned User: {b.contact_person || 'Not Assigned'}</span>
+                  <span className="text-slate-800 font-bold">Assigned User: {typeof b.contact_person === 'string' ? b.contact_person : 'Not Assigned'}</span>
                 </div>
               </div>
 
@@ -481,96 +500,72 @@ export const BranchesPage: React.FC = () => {
               </div>
             )}
 
-            {/* Tab Header Navigation */}
-            <div className="flex border-b border-slate-200 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setActiveTab('basic')}
-                className={`py-2 px-4 border-b-2 transition ${
-                  activeTab === 'basic'
-                    ? 'border-teal-600 text-teal-700'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                1. Basic Info *
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('location')}
-                className={`py-2 px-4 border-b-2 transition ${
-                  activeTab === 'location'
-                    ? 'border-teal-600 text-teal-700'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                2. Location & Address
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('contact')}
-                className={`py-2 px-4 border-b-2 transition ${
-                  activeTab === 'contact'
-                    ? 'border-teal-600 text-teal-700'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                3. Contact & Admin
-              </button>
-            </div>
+            {/* Single Scrollable Form Container */}
+            <form onSubmit={handleAddBranch} className="space-y-4 text-xs max-h-[70vh] overflow-y-auto pr-1">
+              {/* SECTION 1: BASIC INFO */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <Building2 className="w-4 h-4 text-teal-600" /> 1. Basic Campus Information
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Campus Code *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. HYD-MAIN or VIZAG-COAST"
+                      value={branchCode}
+                      onChange={(e) => setBranchCode(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
+                    />
+                  </div>
 
-            <form onSubmit={handleAddBranch} className="space-y-4 text-xs">
-              {/* TAB 1: BASIC INFO */}
-              <div className={activeTab === 'basic' ? 'space-y-3' : 'hidden'}>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Campus Code *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. HYD-MAIN or VIZAG-COAST"
-                    value={branchCode}
-                    onChange={(e) => setBranchCode(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Display Campus Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Hyderabad Main Campus"
+                      value={branchName}
+                      onChange={(e) => setBranchName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Display Campus Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Hyderabad Main Campus"
-                    value={branchName}
-                    onChange={(e) => setBranchName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Legal Registered Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Sri Vignan Educational Trust - Hyd Campus"
+                      value={legalName}
+                      onChange={(e) => setLegalName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Legal Registered Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Sri Vignan Educational Trust - Hyd Campus"
-                    value={legalName}
-                    onChange={(e) => setLegalName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Operational Timezone</label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                  >
-                    <option value="Asia/Kolkata">Asia/Kolkata (IST +5:30)</option>
-                    <option value="UTC">UTC Standard</option>
-                  </select>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Operational Timezone</label>
+                    <select
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
+                    >
+                      <option value="Asia/Kolkata">Asia/Kolkata (IST +5:30)</option>
+                      <option value="UTC">UTC Standard</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* TAB 2: LOCATION & ADDRESS */}
-              <div className={activeTab === 'location' ? 'space-y-3' : 'hidden'}>
+              {/* SECTION 2: LOCATION & ADDRESS */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <MapPin className="w-4 h-4 text-teal-600" /> 2. Location & Address
+                </h4>
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Street Address</label>
                   <input
@@ -578,7 +573,7 @@ export const BranchesPage: React.FC = () => {
                     placeholder="e.g. Road No. 12, Banjara Hills"
                     value={streetAddress}
                     onChange={(e) => setStreetAddress(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
+                    className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
                   />
                 </div>
 
@@ -590,7 +585,7 @@ export const BranchesPage: React.FC = () => {
                       placeholder="e.g. Hyderabad"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium focus:border-teal-500"
                     />
                   </div>
                   <div>
@@ -600,7 +595,7 @@ export const BranchesPage: React.FC = () => {
                       placeholder="e.g. Hyderabad Urban"
                       value={district}
                       onChange={(e) => setDistrict(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium focus:border-teal-500"
                     />
                   </div>
                 </div>
@@ -611,7 +606,7 @@ export const BranchesPage: React.FC = () => {
                     <select
                       value={stateName}
                       onChange={(e) => setStateName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium focus:border-teal-500"
                     >
                       <option value="Telangana">Telangana</option>
                       <option value="Andhra Pradesh">Andhra Pradesh</option>
@@ -625,109 +620,66 @@ export const BranchesPage: React.FC = () => {
                       placeholder="e.g. 500034"
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium focus:border-teal-500"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* TAB 3: CONTACT & ADMIN */}
-              <div className={activeTab === 'contact' ? 'space-y-3' : 'hidden'}>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Primary Campus Phone</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +91 98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
-                </div>
+              {/* SECTION 3: CONTACT & COMMUNICATION */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <UserCheck className="w-4 h-4 text-teal-600" /> 3. Contact & Communication
+                </h4>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Official Campus Email</label>
-                  <input
-                    type="email"
-                    placeholder="e.g. hyd.campus@svic.edu"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                  />
-                </div>
-
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Assign Registered System User *</label>
-                    {systemUsers.length > 0 ? renderUserPicker(
-                      principalCandidates.find((u) => u.name === contactPersonName)?.id || '',
-                      (user) => setContactPersonName(user.name),
-                      branchName.trim() ? { id: 'new-branch-preview', code: branchCode, name: branchName.trim(), status: 'DRAFT' } : null
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="e.g. Dr. K. V. Rao"
-                        value={contactPersonName}
-                        onChange={(e) => setContactPersonName(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                      />
-                    )}
-                    {contactPersonName && (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-                        Selected admin contact: <span className="font-bold text-slate-900">{contactPersonName}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Role Title</label>
+                    <label className="block font-bold text-slate-700 mb-1">Primary Campus Phone</label>
                     <input
                       type="text"
-                      placeholder="e.g. Campus Principal"
-                      value={contactPersonRole}
-                      onChange={(e) => setContactPersonRole(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                      placeholder="e.g. +91 98765 43210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Official Campus Email</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. hyd.campus@svic.edu"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded-xl font-medium outline-none focus:border-teal-500"
                     />
                   </div>
                 </div>
+
+                <div className="p-3 bg-teal-50/60 border border-teal-100 rounded-xl text-slate-600 text-[11px] font-medium flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                  <span>
+                    Principal status defaults to <strong className="text-slate-900">Unassigned</strong>. You can assign or reassign a Principal anytime after creation.
+                  </span>
+                </div>
               </div>
 
-              <div className="flex justify-between items-center pt-3 border-t font-bold">
-                <div className="flex gap-2">
-                  {activeTab !== 'basic' && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(activeTab === 'contact' ? 'location' : 'basic')}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                    >
-                      Back
-                    </button>
-                  )}
-                  {activeTab !== 'contact' && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(activeTab === 'basic' ? 'location' : 'contact')}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                    >
-                      Next
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
-                  >
-                    {submitting ? 'Saving...' : 'Save Campus Branch'}
-                  </button>
-                </div>
+              {/* Action Buttons Footer */}
+              <div className="flex justify-end items-center gap-3 pt-3 border-t font-bold sticky bottom-0 bg-white p-2 border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Campus Branch'}
+                </button>
               </div>
             </form>
           </div>

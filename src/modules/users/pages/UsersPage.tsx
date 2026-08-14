@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Shield, CheckCircle2, X, RefreshCw, Phone, Mail, Building, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, Search, Shield, CheckCircle2, X, RefreshCw, Phone, Mail, Building, ShieldCheck, AlertCircle, Lock } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface UserItem {
   id: string;
@@ -12,11 +13,21 @@ interface UserItem {
 }
 
 export const UsersPage: React.FC = () => {
+  const { activeContext, availableContexts } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+
+  const isPlatformAdmin = activeContext?.scope_type === 'PLATFORM';
+  const isDean = activeContext?.role_codes.includes('INSTITUTION_ADMIN') || activeContext?.scope_type === 'TENANT';
+  const isPrincipal = activeContext?.role_codes.includes('BRANCH_ADMIN') && activeContext?.scope_type === 'BRANCH';
+
+  const userBranchName =
+    availableContexts.find((c) => c.assignment_id === activeContext?.assignment_id)?.branch?.name ||
+    'Main Campus';
 
   // 2-Tab Modal State
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -27,10 +38,19 @@ export const UsersPage: React.FC = () => {
   const [fullName, setFullName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
-  const [role, setRole] = useState<string>('BRANCH_ADMIN');
-  const [branch, setBranch] = useState<string>('Hyderabad Main Campus');
+  const [role, setRole] = useState<string>(isPrincipal ? 'OFFICE_STAFF' : 'BRANCH_ADMIN');
+  const [branch, setBranch] = useState<string>(isPrincipal ? userBranchName : 'Main Campus');
 
   const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isPrincipal) {
+      setRole('OFFICE_STAFF');
+      setBranch(userBranchName);
+    } else if (isDean) {
+      setRole('BRANCH_ADMIN');
+    }
+  }, [isPrincipal, isDean, userBranchName]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -47,8 +67,24 @@ export const UsersPage: React.FC = () => {
     }
   };
 
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('/api/v1/branches');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableBranches(data.map((b: any) => ({ id: b.id, name: b.name || b.displayName })));
+        if (data.length > 0) {
+          setBranch(data[0].name || data[0].displayName);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch branches for selection:', err);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchBranches();
   }, []);
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -108,7 +144,8 @@ export const UsersPage: React.FC = () => {
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesBranch = !isPrincipal || u.branch.toLowerCase().includes(userBranchName.toLowerCase()) || u.branch === 'Unassigned';
+    return matchesSearch && matchesRole && matchesBranch;
   });
 
   const roleLabels: Record<string, string> = {
@@ -198,7 +235,7 @@ export const UsersPage: React.FC = () => {
             <option value="ALL">All Roles</option>
             <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>
             <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>
-            <option value="TEACHER">Teacher / Staff</option>
+            <option value="OFFICE_STAFF">Office Staff</option>
           </select>
         </div>
       </div>
@@ -340,25 +377,40 @@ export const UsersPage: React.FC = () => {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
                   >
-                    <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>
-                    <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>
-                    <option value="TEACHER">Teacher / Subject Faculty</option>
+                    {isPlatformAdmin && <option value="INSTITUTION_ADMIN">Dean (Institution Admin)</option>}
+                    {!isPrincipal && <option value="BRANCH_ADMIN">Principal (Branch Admin)</option>}
+                    <option value="OFFICE_STAFF">Office Staff</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Primary Campus Branch</label>
-                  <select
-                    value={branch}
-                    onChange={(e) => setBranch(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                  >
-                    <option value="Hyderabad Main Campus">Hyderabad Main Campus</option>
-                    <option value="Vijayawada City Campus">Vijayawada City Campus</option>
-                    <option value="Visakhapatnam Campus">Visakhapatnam Campus</option>
-                  </select>
+                  {isPrincipal ? (
+                    <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-xs font-bold text-slate-700">
+                      <span>{userBranchName}</span>
+                      <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Locked to Your Campus
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={branch}
+                      onChange={(e) => setBranch(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
+                    >
+                      {availableBranches.length > 0 ? (
+                        availableBranches.map((b) => (
+                          <option key={b.id} value={b.name}>
+                            {b.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="Main Campus">Main Campus</option>
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
 
