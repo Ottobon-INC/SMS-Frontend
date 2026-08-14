@@ -119,7 +119,6 @@ export const UsersPage: React.FC = () => {
 
       if (res.ok) {
         const newUser = await res.json();
-        setUsers((prev) => [newUser, ...prev]);
         setShowAddModal(false);
         setFullName('');
         setEmail('');
@@ -127,6 +126,8 @@ export const UsersPage: React.FC = () => {
         setModalError(null);
         setNotification(`User "${newUser.name}" created with role ${newUser.role}!`);
         setTimeout(() => setNotification(null), 4000);
+        // Re-fetch the full list from server so role/branch are shown correctly
+        await fetchUsers();
       } else {
         const errText = await res.text();
         setModalError(`Failed to create user: ${errText || res.statusText}`);
