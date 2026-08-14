@@ -17,10 +17,14 @@ import { UsersPage } from "../../modules/users/pages/UsersPage";
 import { ParentPortalShellPage } from "../../modules/parent-portal/pages/ParentPortalShellPage";
 import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/PlatformDashboardShellPage";
 import { ExaminationsContainer } from "../../modules/examinations/routes";
+import { StudentImportCenter } from "../../modules/imports/pages/StudentImportCenter";
+import { ManualAddStudentPage } from "../../modules/imports/pages/ManualAddStudentPage";
+import { TemplateUploadPage } from "../../modules/imports/pages/TemplateUploadPage";
+import { ImportValidationPreview } from "../../modules/imports/pages/ImportValidationPreview";
+import { ImportResultSummary } from "../../modules/imports/pages/ImportResultSummary";
 
 const moduleRoutes = [
   "academic-structure",
-  "imports",
   "fees",
   "attendance",
   "notifications",
@@ -56,6 +60,11 @@ const router = createBrowserRouter([
           { path: "/parent-portal", element: <ParentPortalShellPage /> },
           { path: "/examinations", element: <ExaminationsContainer /> },
           { path: "/examinations/*", element: <ExaminationsContainer /> },
+          { path: "/imports", element: <StudentImportCenter /> },
+          { path: "/imports/manual", element: <ManualAddStudentPage /> },
+          { path: "/imports/template", element: <TemplateUploadPage /> },
+          { path: "/imports/preview/:batchId", element: <ImportValidationPreview /> },
+          { path: "/imports/summary/:batchId", element: <ImportResultSummary /> },
           ...moduleRoutes.map((moduleName) => ({
             path: `/${moduleName}`,
             element: <ModulePlaceholder moduleName={moduleName} />
