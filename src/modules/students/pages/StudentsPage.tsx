@@ -1,33 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, Phone, AlertCircle } from 'lucide-react';
-
-interface Student {
-  id: string;
-  admissionNumber: string;
-  name: string;
-  rollNo: string;
-  gender: string;
-  stream: string;
-  section: string;
-  status: string;
-  father_name?: string;
-  guardian_relationship?: string;
-  guardian_phone?: string;
-  guardian_data?: {
-    father_name?: string;
-    mother_name?: string;
-    guardian_phone?: string;
-    guardian_email?: string;
-  };
-}
+import { studentsApi, type StudentListItem } from '../api/studentsApi';
 
 export const StudentsPage: React.FC = () => {
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<StudentListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [streamFilter, setStreamFilter] = useState<string>('ALL');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // 3-Tab Modal State
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -55,14 +36,14 @@ export const StudentsPage: React.FC = () => {
 
   const fetchStudents = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await fetch('/api/v1/students');
-      if (res.ok) {
-        const data = await res.json();
-        setStudents(data);
-      }
-    } catch (err) {
+      const data = await studentsApi.list();
+      setStudents(data);
+    } catch (err: unknown) {
       console.error('Failed to fetch students:', err);
+      setLoadError(err instanceof Error ? err.message : 'Failed to load students.');
+      setStudents([]);
     } finally {
       setLoading(false);
     }
@@ -84,40 +65,29 @@ export const StudentsPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: fullName.trim(),
-          admissionNumber: admissionNumber.trim() || undefined,
-          gender,
-          date_of_birth: dob,
-          blood_group: bloodGroup,
-          stream,
-          section: sectionName,
-          guardian: {
-            father_name: fatherName,
-            mother_name: motherName,
-            guardian_phone: guardianPhone,
-            guardian_email: guardianEmail,
-          },
-        }),
+      const newStu = await studentsApi.create({
+        name: fullName.trim(),
+        admissionNumber: admissionNumber.trim() || undefined,
+        gender,
+        date_of_birth: dob,
+        blood_group: bloodGroup,
+        stream,
+        section: sectionName,
+        guardian: {
+          father_name: fatherName,
+          mother_name: motherName,
+          guardian_phone: guardianPhone,
+          guardian_email: guardianEmail,
+        },
       });
-
-      if (res.ok) {
-        const newStu = await res.json();
-        setStudents((prev) => [newStu, ...prev]);
-        setShowAddModal(false);
-        resetForm();
-        setNotification(`Student "${newStu.name}" enrolled successfully!`);
-        setTimeout(() => setNotification(null), 4000);
-      } else {
-        const errTxt = await res.text();
-        setModalError(`Failed to enroll student: ${errTxt || res.statusText}`);
-      }
-    } catch (err: any) {
+      setStudents((prev) => [newStu, ...prev]);
+      setShowAddModal(false);
+      resetForm();
+      setNotification(`Student "${newStu.name}" enrolled successfully!`);
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: unknown) {
       console.error('Failed to enroll student:', err);
-      setModalError(`Connection error: ${err.message || 'Server error'}`);
+      setModalError(`Connection error: ${err instanceof Error ? err.message : 'Server error'}`);
     } finally {
       setSubmitting(false);
     }
@@ -221,6 +191,12 @@ export const StudentsPage: React.FC = () => {
       {loading ? (
         <div className="py-12 text-center text-xs font-semibold text-slate-400 flex items-center justify-center gap-2">
           <RefreshCw className="w-5 h-5 animate-spin text-teal-600" /> Loading Student Roster from PostgreSQL...
+        </div>
+      ) : loadError != null ? (
+        <div className="bg-white p-8 rounded-3xl border border-red-200 text-center space-y-2">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
+          <p className="text-sm font-bold text-red-700">Unable To Load Students</p>
+          <p className="text-xs text-red-500">{loadError}</p>
         </div>
       ) : filteredStudents.length === 0 ? (
         <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center space-y-2">
