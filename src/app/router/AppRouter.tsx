@@ -8,26 +8,23 @@ import { ContextSelectionPage } from "../../modules/authentication/pages/Context
 import { LoginPage } from "../../modules/authentication/pages/LoginPage";
 import { PortalSelectionPage } from "../../modules/authentication/pages/PortalSelectionPage";
 import { SignupRequestPage } from "../../modules/authentication/pages/SignupRequestPage";
+import { AcademicStructurePage } from "../../modules/academic-structure/pages/AcademicStructurePage";
+import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
 import { BranchDashboardShellPage } from "../../modules/dashboard/pages/BranchDashboardShellPage";
 import { DashboardShellPage } from "../../modules/dashboard/pages/DashboardShellPage";
-import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
+import { ExaminationsContainer } from "../../modules/examinations/routes";
+import { ImportResultSummary } from "../../modules/imports/pages/ImportResultSummary";
+import { ImportValidationPreview } from "../../modules/imports/pages/ImportValidationPreview";
+import { ManualAddStudentPage } from "../../modules/imports/pages/ManualAddStudentPage";
+import { StudentImportCenter } from "../../modules/imports/pages/StudentImportCenter";
+import { TemplateUploadPage } from "../../modules/imports/pages/TemplateUploadPage";
 import { InstitutionSetupPage } from "../../modules/institution/pages/InstitutionSetupPage";
-import { AcademicStructurePage } from "../../modules/academic-structure/pages/AcademicStructurePage";
-import { StudentsPage } from "../../modules/students/pages/StudentsPage";
-import { UsersPage } from "../../modules/users/pages/UsersPage";
 import { ParentPortalShellPage } from "../../modules/parent-portal/pages/ParentPortalShellPage";
 import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/PlatformDashboardShellPage";
-import { ExaminationsContainer } from "../../modules/examinations/routes";
+import { StudentsPage } from "../../modules/students/pages/StudentsPage";
+import { UsersPage } from "../../modules/users/pages/UsersPage";
 
-const moduleRoutes = [
-  "imports",
-  "fees",
-  "attendance",
-  "notifications",
-  "reports",
-  "audit",
-  "support"
-];
+const moduleRoutes = ["fees", "attendance", "notifications", "reports", "audit", "support"];
 
 function protectedPage(
   path: string,
@@ -63,31 +60,62 @@ const router = createBrowserRouter([
           protectedPage("/branches", <BranchesPage />, { module: "branches", permission: "branch.view" }),
           protectedPage("/students", <StudentsPage />, { module: "students", permission: "student.view" }),
           protectedPage("/users", <UsersPage />, { module: "users", permission: "user.view" }),
-          protectedPage("/institution", <InstitutionSetupPage />, { module: "institution", permission: "institution.view" }),
-          protectedPage("/academic-structure", <AcademicStructurePage />, { module: "academic-structure", permission: "academic_structure.view" }),
-          protectedPage("/parent-portal", <ParentPortalShellPage />, { module: "parent-portal", permission: "parent.child_view" }),
-          protectedPage("/examinations", <ExaminationsContainer />, { module: "examinations", permission: "exam.view" }),
-          protectedPage("/examinations/*", <ExaminationsContainer />, { module: "examinations", permission: "exam.view" }),
+          protectedPage("/institution", <InstitutionSetupPage />, {
+            module: "institution",
+            permission: "institution.view"
+          }),
+          protectedPage("/academic-structure", <AcademicStructurePage />, {
+            module: "academic-structure",
+            permission: "academic_structure.view"
+          }),
+          protectedPage("/parent-portal", <ParentPortalShellPage />, {
+            module: "parent-portal",
+            permission: "parent.child_view"
+          }),
+          protectedPage("/examinations", <ExaminationsContainer />, {
+            module: "examinations",
+            permission: "exam.view"
+          }),
+          protectedPage("/examinations/*", <ExaminationsContainer />, {
+            module: "examinations",
+            permission: "exam.view"
+          }),
+          protectedPage("/imports", <StudentImportCenter />, {
+            module: "imports",
+            permission: "import.view"
+          }),
+          protectedPage("/imports/manual", <ManualAddStudentPage />, {
+            module: "imports",
+            permission: "import.view"
+          }),
+          protectedPage("/imports/template", <TemplateUploadPage />, {
+            module: "imports",
+            permission: "import.view"
+          }),
+          protectedPage("/imports/preview/:batchId", <ImportValidationPreview />, {
+            module: "imports",
+            permission: "import.view"
+          }),
+          protectedPage("/imports/summary/:batchId", <ImportResultSummary />, {
+            module: "imports",
+            permission: "import.view"
+          }),
           ...moduleRoutes.map((moduleName) => ({
             element: (
               <ProtectedRoute
                 module={moduleName}
                 permission={
-                  moduleName === "academic-structure"
-                    ? "academic_structure.view"
-                    : moduleName === "imports"
-                      ? "import.view"
-                      : moduleName === "fees"
-                        ? "fee.view"
-                        : moduleName === "attendance"
-                          ? "attendance.view"
-                          : moduleName === "notifications"
-                            ? "notification.view"
-                            : moduleName === "reports"
-                              ? "report.branch_view"
-                              : moduleName === "audit"
-                                ? "audit.view"
-                                : undefined
+                  moduleName === "fees"
+                    ? "fee.view"
+                    : moduleName === "attendance"
+                      ? "attendance.view"
+                      : moduleName === "notifications"
+                        ? "notification.view"
+                        : moduleName === "reports"
+                          ? "report.branch_view"
+                          : moduleName === "audit"
+                            ? "audit.view"
+                            : undefined
                 }
               />
             ),

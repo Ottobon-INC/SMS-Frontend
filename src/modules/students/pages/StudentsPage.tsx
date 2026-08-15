@@ -12,6 +12,7 @@ interface Student {
   section: string;
   status: string;
   father_name?: string;
+  guardian_relationship?: string;
   guardian_phone?: string;
   guardian_data?: {
     father_name?: string;
@@ -253,9 +254,14 @@ export const StudentsPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-slate-600">
                     <div className="text-[11px]">
-                      <span className="font-bold block text-slate-800">{s.guardian_data?.father_name || s.father_name || 'Father / Guardian'}</span>
+                      <span className="font-bold block text-slate-800">
+                        {s.father_name || 'N/A'}
+                        {s.guardian_relationship && (
+                          <span className="text-slate-400 font-normal ml-1 capitalize">({s.guardian_relationship.toLowerCase()})</span>
+                        )}
+                      </span>
                       <span className="text-slate-400 flex items-center gap-1 font-mono">
-                        <Phone className="w-3 h-3" /> {s.guardian_data?.guardian_phone || s.guardian_phone || '+91 98765 12345'}
+                        <Phone className="w-3 h-3" /> {s.guardian_phone || 'N/A'}
                       </span>
                     </div>
                   </td>
