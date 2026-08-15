@@ -1,14 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, Phone, AlertCircle } from 'lucide-react';
-import { studentsApi, type StudentListItem } from '../api/studentsApi';
+import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, AlertCircle, Edit3, Save } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
+import { studentsApi, type StudentInlineUpdatePayload, type StudentListItem } from '../api/studentsApi';
+
+type StudentColumn = {
+  key: string;
+  label: string;
+  value: (student: StudentListItem) => unknown;
+  className?: string;
+  updateKey?: keyof StudentInlineUpdatePayload;
+  inputType?: 'text' | 'date' | 'select';
+  options?: string[];
+};
+
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  return String(value);
+}
+
+const studentColumns: StudentColumn[] = [
+  { key: 'admissionNumber', label: 'Admission No', value: (s) => s.admissionNumber, className: 'font-mono text-teal-700 font-bold' },
+  { key: 'studentName', label: 'Student Name', value: (s) => s.displayName ?? s.legalName ?? s.name, className: 'font-bold text-slate-900', updateKey: 'student_name' },
+  { key: 'gender', label: 'Gender', value: (s) => s.gender, updateKey: 'gender', inputType: 'select', options: ['MALE', 'FEMALE', 'OTHER'] },
+  { key: 'dateOfBirth', label: 'Date Of Birth', value: (s) => s.dateOfBirth ?? s.dob, updateKey: 'date_of_birth', inputType: 'date' },
+  { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
+  { key: 'studentEmail', label: 'Student Email', value: (s) => s.studentEmail, updateKey: 'student_email' },
+  { key: 'academicYearName', label: 'Academic Year', value: (s) => s.academicYearName },
+  { key: 'programmeName', label: 'Programme / Stream', value: (s) => s.programmeName ?? s.stream },
+  { key: 'sectionName', label: 'Section', value: (s) => s.sectionName ?? s.section },
+  { key: 'rollNumber', label: 'Roll No', value: (s) => s.rollNumber ?? s.rollNo, updateKey: 'roll_number' },
+  { key: 'joiningDate', label: 'Joining Date', value: (s) => s.joiningDate, updateKey: 'joining_date', inputType: 'date' },
+  { key: 'endingDate', label: 'Ending Date', value: (s) => s.endingDate, updateKey: 'ending_date', inputType: 'date' },
+  { key: 'guardianName', label: 'Guardian Name', value: (s) => s.guardianName ?? s.father_name, updateKey: 'guardian_name' },
+  { key: 'guardianRelationship', label: 'Relationship', value: (s) => s.guardianRelationship ?? s.guardian_relationship, updateKey: 'guardian_relationship', inputType: 'select', options: ['FATHER', 'MOTHER', 'LEGAL_GUARDIAN', 'RELATIVE', 'SPONSOR', 'OTHER'] },
+  { key: 'guardianPhone', label: 'Guardian Phone', value: (s) => s.guardianPhone ?? s.guardian_phone, updateKey: 'guardian_phone' },
+  { key: 'guardianEmail', label: 'Guardian Email', value: (s) => s.guardianEmail, updateKey: 'guardian_email' },
+  { key: 'studentCreatedAt', label: 'Student Created', value: (s) => s.studentCreatedAt },
+];
 
 export const StudentsPage: React.FC = () => {
+  const auth = useAuth();
   const [students, setStudents] = useState<StudentListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [streamFilter, setStreamFilter] = useState<string>('ALL');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState<boolean>(false);
+  const [savingEdits, setSavingEdits] = useState<boolean>(false);
+  const [draftChanges, setDraftChanges] = useState<Record<string, StudentInlineUpdatePayload>>({});
 
   // 3-Tab Modal State
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -33,6 +78,7 @@ export const StudentsPage: React.FC = () => {
   const [guardianEmail, setGuardianEmail] = useState<string>('');
 
   const [notification, setNotification] = useState<string | null>(null);
+  const canEditStudents = auth.hasAnyPermission(['student.update_basic', 'student.update_sensitive']);
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -105,11 +151,73 @@ export const StudentsPage: React.FC = () => {
     setActiveTab('identity');
   };
 
+  const toggleEditMode = () => {
+    setEditMode((current) => !current);
+    setDraftChanges({});
+  };
+
+  const updateDraftCell = (studentId: string, key: keyof StudentInlineUpdatePayload, value: string) => {
+    setDraftChanges((current) => ({
+      ...current,
+      [studentId]: {
+        ...current[studentId],
+        [key]: value,
+      },
+    }));
+  };
+
+  const getDraftValue = (student: StudentListItem, column: StudentColumn): string => {
+    if (column.updateKey == null) {
+      return formatCellValue(column.value(student));
+    }
+    const draft = draftChanges[student.id]?.[column.updateKey];
+    if (draft !== undefined && draft !== null) {
+      return String(draft);
+    }
+    const currentValue = column.value(student);
+    return currentValue === '-' ? '' : formatCellValue(currentValue);
+  };
+
+  const saveEdits = async () => {
+    const changedEntries = Object.entries(draftChanges).filter(([, changes]) => Object.keys(changes).length > 0);
+    if (changedEntries.length === 0) {
+      setEditMode(false);
+      return;
+    }
+    const confirmed = window.confirm(`Save changes for ${changedEntries.length} student record(s)?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingEdits(true);
+    setLoadError(null);
+    try {
+      for (const [studentId, changes] of changedEntries) {
+        await studentsApi.updateInline(studentId, changes);
+      }
+      await fetchStudents();
+      setDraftChanges({});
+      setEditMode(false);
+      setNotification('Student changes saved successfully.');
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to save student changes.');
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStream = streamFilter === 'ALL' || s.stream === streamFilter;
+      s.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formatCellValue(s.guardianName).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formatCellValue(s.guardianPhone).toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStream =
+      streamFilter === 'ALL' ||
+      s.stream === streamFilter ||
+      s.programmeCode === streamFilter ||
+      s.streamCode === streamFilter;
     return matchesSearch && matchesStream;
   });
 
@@ -146,6 +254,33 @@ export const StudentsPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+          {canEditStudents && (
+            editMode ? (
+              <>
+                <button
+                  onClick={saveEdits}
+                  disabled={savingEdits}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" /> {savingEdits ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={toggleEditMode}
+                  disabled={savingEdits}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition disabled:opacity-50"
+                >
+                  Cancel Edit
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={toggleEditMode}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+              >
+                <Edit3 className="w-4 h-4" /> Edit Student Data
+              </button>
+            )
+          )}
           <button
             onClick={() => {
               resetForm();
@@ -205,51 +340,58 @@ export const StudentsPage: React.FC = () => {
           <p className="text-xs text-slate-400">Click "Enroll New Student" to add student records.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="max-h-[64vh] overflow-auto">
+            <table className="min-w-[1800px] w-max text-left text-xs border-collapse">
+              <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4">Admission No</th>
-                <th className="py-3.5 px-4">Student Name</th>
-                <th className="py-3.5 px-4">Gender</th>
-                <th className="py-3.5 px-4">Stream</th>
-                <th className="py-3.5 px-4">Guardian Contact</th>
-                <th className="py-3.5 px-4">Status</th>
+                {studentColumns.map((column) => (
+                  <th key={column.key} className="py-3.5 px-4 whitespace-nowrap border-r border-slate-200 last:border-r-0">
+                    {column.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {filteredStudents.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/80 transition">
-                  <td className="py-3 px-4 font-mono text-[11px] text-teal-700 font-bold">{s.admissionNumber}</td>
-                  <td className="py-3 px-4 font-bold text-slate-900">{s.name}</td>
-                  <td className="py-3 px-4 text-slate-500">{s.gender}</td>
-                  <td className="py-3 px-4">
-                    <span className="px-2.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-lg text-[10px] font-bold">
-                      {s.stream} ({s.section})
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-slate-600">
-                    <div className="text-[11px]">
-                      <span className="font-bold block text-slate-800">
-                        {s.father_name || 'N/A'}
-                        {s.guardian_relationship && (
-                          <span className="text-slate-400 font-normal ml-1 capitalize">({s.guardian_relationship.toLowerCase()})</span>
-                        )}
-                      </span>
-                      <span className="text-slate-400 flex items-center gap-1 font-mono">
-                        <Phone className="w-3 h-3" /> {s.guardian_phone || 'N/A'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
-                      {s.status}
-                    </span>
-                  </td>
+                  {studentColumns.map((column) => (
+                    <td
+                      key={`${s.id}-${column.key}`}
+                      className={`py-3 px-4 max-w-[240px] whitespace-nowrap border-r border-slate-100 last:border-r-0 ${column.className ?? 'text-slate-600'}`}
+                      title={formatCellValue(column.value(s))}
+                    >
+                      {editMode && column.updateKey != null ? (
+                        column.inputType === 'select' ? (
+                          <select
+                            value={getDraftValue(s, column)}
+                            onChange={(event) => updateDraftCell(s.id, column.updateKey!, event.target.value)}
+                            className="min-w-[150px] rounded-lg border border-teal-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 outline-none focus:border-teal-500"
+                          >
+                            {column.options?.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={column.inputType ?? 'text'}
+                            value={getDraftValue(s, column)}
+                            onChange={(event) => updateDraftCell(s.id, column.updateKey!, event.target.value)}
+                            className="min-w-[150px] rounded-lg border border-teal-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 outline-none focus:border-teal-500"
+                          />
+                        )
+                      ) : (
+                        formatCellValue(column.value(s))
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -78,3 +78,12 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
   return parseResponse<T>(response);
 }
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    method: "PATCH",
+    headers: await buildHeaders(),
+    body: JSON.stringify(body)
+  });
+  return parseResponse<T>(response);
+}
