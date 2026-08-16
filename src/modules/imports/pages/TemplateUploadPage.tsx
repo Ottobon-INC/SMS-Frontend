@@ -1,27 +1,22 @@
 import { useState, useEffect } from "react";
-import { UploadCloud, File, AlertCircle, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { UploadCloud, File, AlertCircle, Loader2, Download, CheckCircle2 } from "lucide-react";
 import { useImportsApi } from "../hooks/useImportsApi";
-import { env } from "../../../app/config/env";
+import { importsApi } from "../api/importsApi";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-type UploadResponse = {
-  batch_id: string;
-};
-
-type ErrorResponse = {
-  detail?: string;
-};
-
 export function TemplateUploadPage() {
+  const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const { useBranches } = useImportsApi();
   const { data: branches, isLoading: loadingBranches } = useBranches();
   
   const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,31 +40,16 @@ export function TemplateUploadPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+    const confirmed = window.confirm(
+      "Upload this Excel file for validation? This will not create student records yet. You will review a validation preview before final import."
+    );
+    if (!confirmed) return;
 
     setIsUploading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("auth_token");
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("branch_id", selectedBranch);
-
-      const response = await fetch(`${env.apiBaseUrl}/imports/students/upload`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errData = (await response.json()) as ErrorResponse;
-        throw new Error(errData.detail || "Upload failed");
-      }
-
-      const data = (await response.json()) as UploadResponse;
-      // Redirect to preview page using window.location for simplicity, or we could use react-router navigate
-      window.location.href = `/imports/preview/${data.batch_id}`;
+      const data = await importsApi.uploadStudentTemplate(selectedFile, selectedBranch);
+      navigate(`/imports/preview/${data.batch_id}`);
 
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Upload failed"));
@@ -78,16 +58,78 @@ export function TemplateUploadPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    setIsDownloading(true);
+    setError(null);
+    try {
+      const blob = await importsApi.downloadStudentTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "student_import_template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to download template"));
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Upload Student Template</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Upload your completed Excel template. The system will validate the data before finalizing the import.
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Upload Student Template</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Download the approved Excel template, fill student rows, then upload it for validation before final import.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadTemplate}
+          disabled={isDownloading}
+          className="inline-flex items-center justify-center rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+        >
+          {isDownloading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Preparing...
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Download Template
+            </>
+          )}
+        </button>
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="mb-6 grid gap-3 rounded-xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
+            <p>
+              Use only the downloaded template. It contains the same operational student columns used by the Students page plus
+              instructions and reference values.
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
+            <p>
+              Do not fill <strong>Student Created</strong>. It is generated by the system after records are saved.
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
+            <p>
+              Upload does not immediately create students. The next step validates duplicates, academic placement, guardian details,
+              and shows a preview before commit.
+            </p>
+          </div>
+        </div>
         
         <div className="mb-6 space-y-2">
           <label className="text-sm font-medium text-gray-700">Target Branch (Optional)</label>

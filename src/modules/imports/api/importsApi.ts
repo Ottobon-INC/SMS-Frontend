@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "../../../api/client/apiClient";
+import { apiDownloadBlob, apiGet, apiPatch, apiPost, apiPostForm } from "../../../api/client/apiClient";
 
 export type LookupItem = {
   id: string;
@@ -68,12 +68,25 @@ export type PreviewResponse = {
   rows: ImportRowResult[];
 };
 
+export type UploadResponse = {
+  message: string;
+  batch_id: string;
+  status: string;
+};
+
 export type CommitBatchResponse = {
   message: string;
   batch_id?: string;
 };
 
 export const importsApi = {
+  downloadStudentTemplate: () => apiDownloadBlob("/imports/students/template"),
+  uploadStudentTemplate: (file: File, branchId: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("branch_id", branchId);
+    return apiPostForm<UploadResponse>("/imports/students/upload", formData);
+  },
   getBranches: () => apiGet<LookupItem[]>("/imports/students/lookups/branches"),
   getAcademicYears: () => apiGet<LookupItem[]>("/imports/students/lookups/academic-years"),
   getProgrammes: () => apiGet<ProgrammeLookup[]>("/academic-structure/programmes"),
@@ -89,6 +102,8 @@ export const importsApi = {
   manualAddStudent: (payload: ManualAddStudentRequest) => apiPost<ManualAddStudentResponse>("/imports/students/manual-student", payload),
   activatePortal: (guardianId: string) => apiPost<ActivatePortalResponse>(`/imports/students/guardians/${guardianId}/activate-portal`, {}),
   getPreview: (batchId: string) => apiGet<PreviewResponse>(`/imports/students/batches/${batchId}/preview`),
+  correctPreviewRow: (batchId: string, rowId: string, rawData: Record<string, unknown>) =>
+    apiPatch<PreviewResponse>(`/imports/students/batches/${batchId}/rows/${rowId}`, { raw_data: rawData }),
   commitBatch: (batchId: string) =>
     apiPost<CommitBatchResponse>(`/imports/students/batches/${batchId}/commit`, {})
 };

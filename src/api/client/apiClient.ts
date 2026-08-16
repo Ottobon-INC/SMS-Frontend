@@ -87,3 +87,25 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   });
   return parseResponse<T>(response);
 }
+
+export async function apiDownloadBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    headers: await buildHeaders()
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Download failed with status ${response.status}`);
+  }
+  return response.blob();
+}
+
+export async function apiPostForm<T>(path: string, body: FormData): Promise<T> {
+  const headers = await buildHeaders();
+  delete (headers as Record<string, string>)["Content-Type"];
+  const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    method: "POST",
+    headers,
+    body
+  });
+  return parseResponse<T>(response);
+}
