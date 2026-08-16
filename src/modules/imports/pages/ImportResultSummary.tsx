@@ -1,9 +1,14 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2, Users, ArrowRight } from "lucide-react";
+import { ArrowRight, CheckCircle2, IndianRupee, Users } from "lucide-react";
 
-export function ImportResultSummary() {
+type ImportResultSummaryProps = {
+  importType?: "students" | "fees";
+};
+
+export function ImportResultSummary({ importType = "students" }: ImportResultSummaryProps) {
   const navigate = useNavigate();
   const { batchId } = useParams<{ batchId: string }>();
+  const isFeeImport = importType === "fees";
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -14,16 +19,18 @@ export function ImportResultSummary() {
         
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Import Successful!</h1>
         <p className="text-lg text-gray-600 mb-8 max-w-lg">
-          The students have been successfully imported and enrolled. Guardian accounts have been created but are not yet activated.
+          {isFeeImport
+            ? "The fee accounts have been created and initial ledger entries have been posted."
+            : "The students have been successfully imported and enrolled. Guardian accounts have been created but are not yet activated."}
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md mb-8">
           <button 
-            onClick={() => navigate("/students")}
+            onClick={() => navigate(isFeeImport ? "/fees" : "/students")}
             className="flex items-center justify-center px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
-            <Users className="h-5 w-5 mr-2 text-gray-500" />
-            View Students
+            {isFeeImport ? <IndianRupee className="h-5 w-5 mr-2 text-gray-500" /> : <Users className="h-5 w-5 mr-2 text-gray-500" />}
+            {isFeeImport ? "View Fees" : "View Students"}
           </button>
           
           <button 

@@ -28,7 +28,7 @@ function getEditableValue(value: unknown): string {
   return "";
 }
 
-const previewColumns = [
+const studentPreviewColumns = [
   "Admission No",
   "Student Name",
   "Gender",
@@ -48,7 +48,24 @@ const previewColumns = [
   "Student Created"
 ] as const;
 
-export function ImportValidationPreview() {
+const feePreviewColumns = [
+  "Admission No",
+  "Student Name",
+  "Academic Year",
+  "Programme / Stream",
+  "Section",
+  "Assigned Fee",
+  "Government Scholarship",
+  "Concession",
+  "Payment Schedule Type",
+  "Notes"
+] as const;
+
+type ImportValidationPreviewProps = {
+  importType?: "students" | "fees";
+};
+
+export function ImportValidationPreview({ importType = "students" }: ImportValidationPreviewProps) {
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -71,7 +88,7 @@ export function ImportValidationPreview() {
   const loadPreview = async (id: string) => {
     try {
       setIsLoading(true);
-      const res = await importsApi.getPreview(id);
+      const res = importType === "fees" ? await importsApi.getFeePreview(id) : await importsApi.getPreview(id);
       setData(res);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load preview"));
@@ -85,8 +102,13 @@ export function ImportValidationPreview() {
     setActionError(null);
     setIsCommitting(true);
     try {
-      await importsApi.commitBatch(batchId);
-      navigate(`/imports/summary/${batchId}`);
+      if (importType === "fees") {
+        await importsApi.commitFeeBatch(batchId);
+        navigate(`/imports/fees/summary/${batchId}`);
+      } else {
+        await importsApi.commitBatch(batchId);
+        navigate(`/imports/summary/${batchId}`);
+      }
     } catch (err: unknown) {
       setActionError(getErrorMessage(err, "Failed to commit import"));
       setIsCommitting(false);
@@ -114,7 +136,10 @@ export function ImportValidationPreview() {
     if (!confirmed) return;
     setIsSavingRow(true);
     try {
-      const correctedPreview = await importsApi.correctPreviewRow(batchId, editingRowId, editedRow);
+      const correctedPreview =
+        importType === "fees"
+          ? await importsApi.correctFeePreviewRow(batchId, editingRowId, editedRow)
+          : await importsApi.correctPreviewRow(batchId, editingRowId, editedRow);
       setData(correctedPreview);
       setEditingRowId(null);
       setEditedRow({});
@@ -147,6 +172,8 @@ export function ImportValidationPreview() {
   const rejectedRows = getSummaryNumber(summary, "rejected_rows");
   const hasRejected = rejectedRows > 0;
   const hasCommitPermission = auth.hasPermission("import.commit");
+  const previewColumns = importType === "fees" ? feePreviewColumns : studentPreviewColumns;
+  const importSubject = importType === "fees" ? "fee accounts" : "student records";
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -184,7 +211,7 @@ export function ImportValidationPreview() {
           <div>
             <h4 className="text-sm font-medium text-amber-900">Finalize Permission Required</h4>
             <p className="text-sm text-amber-800 mt-1">
-              Your current role can upload and validate imports, but it does not currently have the import.commit permission required to create student records.
+              Your current role can upload and validate imports, but it does not currently have the import.commit permission required to create {importSubject}.
             </p>
           </div>
         </div>
@@ -250,6 +277,7 @@ export function ImportValidationPreview() {
             <p className="text-sm text-red-700 mt-1">
               You cannot finalize this import because some rows contain critical errors.
               Edit the affected rows below and save each correction to revalidate the preview.
+              Finalizing this batch will create {importSubject}.
             </p>
           </div>
         </div>

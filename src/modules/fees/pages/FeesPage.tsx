@@ -1,0 +1,906 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CreditCard,
+  IndianRupee,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  WalletCards,
+  X
+} from "lucide-react";
+import { useAuth } from "../../authentication/providers/AuthProvider";
+import { feesApi } from "../api/feesApi";
+import type {
+  FeeAccountCreatePayload,
+  FeeAccountListItem,
+  FeeEnrollmentOption,
+  FeeLedgerEntryItem,
+  FeePaymentCreatePayload
+} from "../types";
+
+function money(value: string): string {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2
+  }).format(parsed);
+}
+
+function statusClass(status: string): string {
+  if (status === "PAID") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "PARTIALLY_PAID") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "OVERDUE") return "bg-rose-50 text-rose-700 border-rose-200";
+  return "bg-slate-50 text-slate-700 border-slate-200";
+}
+
+function ledgerTypeLabel(entryType: string): string {
+  return entryType.replaceAll("_", " ");
+}
+
+export function FeesPage() {
+  const auth = useAuth();
+  const [accounts, setAccounts] = useState<FeeAccountListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupOptions, setSetupOptions] = useState<FeeEnrollmentOption[]>([]);
+  const [setupOptionsLoading, setSetupOptionsLoading] = useState(false);
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
+  const [assignedFeeAmount, setAssignedFeeAmount] = useState("");
+  const [scholarshipAmount, setScholarshipAmount] = useState("0");
+  const [concessionAmount, setConcessionAmount] = useState("0");
+  const [paymentScheduleType, setPaymentScheduleType] =
+    useState<FeeAccountCreatePayload["payment_schedule_type"]>("ONE_TIME");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPaymentAccount, setSelectedPaymentAccount] = useState<FeeAccountListItem | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState<FeePaymentCreatePayload["payment_mode"]>("CASH");
+  const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [externalReference, setExternalReference] = useState("");
+  const [paymentPeriodLabel, setPaymentPeriodLabel] = useState("");
+  const [installmentNumber, setInstallmentNumber] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [lastReceiptNumber, setLastReceiptNumber] = useState<string | null>(null);
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [selectedLedgerAccount, setSelectedLedgerAccount] = useState<FeeAccountListItem | null>(null);
+  const [ledgerEntries, setLedgerEntries] = useState<FeeLedgerEntryItem[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+
+  const canSetupFeeAccount = auth.hasPermission("fee.basic_assign");
+  const canRecordPayment = auth.hasPermission("fee.payment_record");
+
+  async function fetchFeeAccounts() {
+    setLoading(true);
+    setError(null);
+    try {
+      setAccounts(await feesApi.listAccounts());
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Failed to load fee accounts.");
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void fetchFeeAccounts();
+  }, []);
+
+  async function openSetupModal() {
+    setShowSetupModal(true);
+    setSetupError(null);
+    setSetupOptionsLoading(true);
+    try {
+      const options = await feesApi.listSetupOptions();
+      setSetupOptions(options);
+      setSelectedEnrollmentId(options[0]?.enrollment_id ?? "");
+    } catch (exc) {
+      setSetupError(exc instanceof Error ? exc.message : "Failed to load eligible enrollments.");
+      setSetupOptions([]);
+      setSelectedEnrollmentId("");
+    } finally {
+      setSetupOptionsLoading(false);
+    }
+  }
+
+  function closeSetupModal(force = false) {
+    if (saving && !force) return;
+    setShowSetupModal(false);
+    setSetupError(null);
+    setSelectedEnrollmentId("");
+    setAssignedFeeAmount("");
+    setScholarshipAmount("0");
+    setConcessionAmount("0");
+    setPaymentScheduleType("ONE_TIME");
+  }
+
+  async function createFeeAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSetupError(null);
+
+    const assigned = Number(assignedFeeAmount);
+    const scholarship = Number(scholarshipAmount || "0");
+    const concession = Number(concessionAmount || "0");
+    if (!selectedEnrollmentId) {
+      setSetupError("Select a student enrollment.");
+      return;
+    }
+    if (Number.isNaN(assigned) || assigned < 0) {
+      setSetupError("Assigned fee must be zero or greater.");
+      return;
+    }
+    if (Number.isNaN(scholarship) || Number.isNaN(concession) || scholarship < 0 || concession < 0) {
+      setSetupError("Scholarship and concession must be zero or greater.");
+      return;
+    }
+    if (scholarship + concession > assigned) {
+      setSetupError("Scholarship and concession cannot exceed assigned fee.");
+      return;
+    }
+
+    const selected = setupOptions.find((option) => option.enrollment_id === selectedEnrollmentId);
+    const confirmed = window.confirm(
+      `Create fee account for ${selected?.student_name ?? "selected student"} with net payable ${money(
+        String(assigned - scholarship - concession)
+      )}?`
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      await feesApi.createAccount({
+        enrollment_id: selectedEnrollmentId,
+        assigned_fee_amount: assigned.toFixed(2),
+        scholarship_amount: scholarship.toFixed(2),
+        concession_amount: concession.toFixed(2),
+        payment_schedule_type: paymentScheduleType
+      });
+      closeSetupModal(true);
+      await fetchFeeAccounts();
+    } catch (exc) {
+      setSetupError(exc instanceof Error ? exc.message : "Failed to create fee account.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openPaymentModal(account: FeeAccountListItem) {
+    setSelectedPaymentAccount(account);
+    setPaymentAmount(account.outstanding_amount);
+    setPaymentMode("CASH");
+    setReceiptDate(new Date().toISOString().slice(0, 10));
+    setExternalReference("");
+    setPaymentPeriodLabel("");
+    setInstallmentNumber("");
+    setPaymentNotes("");
+    setPaymentError(null);
+    setLastReceiptNumber(null);
+    setShowPaymentModal(true);
+  }
+
+  function closePaymentModal(force = false) {
+    if (paymentSaving && !force) return;
+    setShowPaymentModal(false);
+    setSelectedPaymentAccount(null);
+    setPaymentError(null);
+    setPaymentAmount("");
+    setLastReceiptNumber(null);
+  }
+
+  async function postPayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPaymentAccount) return;
+    setPaymentError(null);
+
+    const amount = Number(paymentAmount);
+    const outstanding = Number(selectedPaymentAccount.outstanding_amount);
+    if (Number.isNaN(amount) || amount <= 0) {
+      setPaymentError("Payment amount must be greater than zero.");
+      return;
+    }
+    if (amount > outstanding) {
+      setPaymentError("Payment amount cannot exceed outstanding amount.");
+      return;
+    }
+    if (!receiptDate) {
+      setPaymentError("Receipt date is required.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Post payment of ${money(amount.toFixed(2))} for ${selectedPaymentAccount.student_name}? This will create a receipt ledger entry.`
+    );
+    if (!confirmed) return;
+
+    setPaymentSaving(true);
+    try {
+      const response = await feesApi.postPayment(selectedPaymentAccount.id, {
+        amount: amount.toFixed(2),
+        payment_mode: paymentMode,
+        receipt_date: receiptDate,
+        external_reference: externalReference.trim() || null,
+        payment_period_label: paymentPeriodLabel.trim() || null,
+        installment_number: installmentNumber ? Number(installmentNumber) : null,
+        notes: paymentNotes.trim() || null
+      });
+      setLastReceiptNumber(response.receipt_number);
+      closePaymentModal(true);
+      await fetchFeeAccounts();
+      window.alert(`Payment posted successfully. Receipt No: ${response.receipt_number}`);
+    } catch (exc) {
+      setPaymentError(exc instanceof Error ? exc.message : "Failed to post payment.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+
+  async function openLedgerModal(account: FeeAccountListItem) {
+    setSelectedLedgerAccount(account);
+    setLedgerEntries([]);
+    setLedgerError(null);
+    setLedgerLoading(true);
+    setShowLedgerModal(true);
+    try {
+      const response = await feesApi.getLedger(account.id);
+      setSelectedLedgerAccount(response.fee_account);
+      setLedgerEntries(response.entries);
+    } catch (exc) {
+      setLedgerError(exc instanceof Error ? exc.message : "Failed to load fee ledger.");
+    } finally {
+      setLedgerLoading(false);
+    }
+  }
+
+  function closeLedgerModal() {
+    setShowLedgerModal(false);
+    setSelectedLedgerAccount(null);
+    setLedgerEntries([]);
+    setLedgerError(null);
+  }
+
+  const filteredAccounts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return accounts;
+    return accounts.filter((account) =>
+      [
+        account.admission_number,
+        account.student_name,
+        account.branch_name,
+        account.academic_year,
+        account.programme_name,
+        account.section_name,
+        account.status
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    );
+  }, [accounts, searchQuery]);
+
+  const totals = useMemo(
+    () =>
+      accounts.reduce(
+        (current, account) => ({
+          net: current.net + Number(account.net_payable_amount),
+          paid: current.paid + Number(account.total_paid_amount),
+          outstanding: current.outstanding + Number(account.outstanding_amount)
+        }),
+        { net: 0, paid: 0, outstanding: 0 }
+      ),
+    [accounts]
+  );
+
+  return (
+    <div className="space-y-6 p-6">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-slate-950">
+              <IndianRupee className="h-6 w-6 text-teal-600" />
+              Fee Accounts & Student Ledger
+            </h1>
+            <p className="mt-1 text-xs text-slate-500">
+              View assigned fees, scholarships, concessions, payments and outstanding dues from PostgreSQL. Use Imports for bulk fee setup.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void fetchFeeAccounts()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
+            title="Refresh fee accounts"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          {canSetupFeeAccount && (
+            <button
+              type="button"
+              onClick={() => void openSetupModal()}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-teal-700"
+            >
+              <Plus className="h-4 w-4" />
+              Manual Fee Setup
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Net Payable</p>
+          <p className="mt-2 text-lg font-bold text-slate-950">{money(String(totals.net))}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Paid</p>
+          <p className="mt-2 text-lg font-bold text-emerald-700">{money(String(totals.paid))}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
+          <p className="mt-2 text-lg font-bold text-rose-700">{money(String(totals.outstanding))}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-xs md:max-w-md">
+        <Search className="h-4 w-4 text-slate-400" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by student, admission no, stream or status..."
+          className="w-full bg-transparent text-xs font-medium text-slate-700 outline-none placeholder:text-slate-400"
+        />
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800">
+          <AlertCircle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
+
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-xs font-semibold text-slate-400">
+            <RefreshCw className="h-5 w-5 animate-spin text-teal-600" />
+            Loading fee accounts...
+          </div>
+        ) : filteredAccounts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center">
+            <WalletCards className="h-9 w-9 text-slate-300" />
+            <p className="mt-3 text-sm font-bold text-slate-900">No Fee Accounts Found</p>
+            <p className="mt-1 max-w-md text-xs text-slate-400">
+              Fee account creation, payment receipts, scholarship posting and adjustment approvals will be implemented in the next fee phases.
+            </p>
+          </div>
+        ) : (
+          <div className="max-h-[560px] overflow-auto">
+            <table className="min-w-[1440px] w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="border-b border-slate-200 px-4 py-3">Admission No</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Student</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Academic Year</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Programme</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Section</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Assigned</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Scholarship</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Concession</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Net Payable</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Paid</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Outstanding</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Schedule</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Status</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredAccounts.map((account) => (
+                  <tr key={account.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono font-bold text-teal-700">{account.admission_number ?? "-"}</td>
+                    <td className="px-4 py-3 font-bold text-slate-950">{account.student_name}</td>
+                    <td className="px-4 py-3 text-slate-700">{account.academic_year ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-700">{account.programme_name ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-700">{account.section_name ?? "-"}</td>
+                    <td className="px-4 py-3 text-right font-mono">{money(account.assigned_fee_amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{money(account.scholarship_amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{money(account.concession_amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">{money(account.net_payable_amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-emerald-700">{money(account.total_paid_amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-rose-700">{money(account.outstanding_amount)}</td>
+                    <td className="px-4 py-3 text-slate-700">{account.payment_schedule_type.replaceAll("_", " ")}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClass(account.status)}`}>
+                        {account.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void openLedgerModal(account)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <ReceiptText className="h-3 w-3" />
+                          View Ledger
+                        </button>
+                        {canRecordPayment && Number(account.outstanding_amount) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openPaymentModal(account)}
+                          className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-slate-800"
+                        >
+                          <CreditCard className="h-3 w-3" />
+                          Record Payment
+                        </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {showSetupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Manual Fee Setup</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Create the first fee account for one active enrollment. Use Imports for bulk setup; payments and receipts are handled in the next phase.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeSetupModal()}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {setupError && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+                <AlertCircle className="h-4 w-4" />
+                {setupError}
+              </div>
+            )}
+
+            {setupOptionsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-xs font-semibold text-slate-400">
+                <RefreshCw className="h-5 w-5 animate-spin text-teal-600" />
+                Loading eligible enrollments...
+              </div>
+            ) : setupOptions.length === 0 ? (
+              <div className="py-10 text-center">
+                <WalletCards className="mx-auto h-9 w-9 text-slate-300" />
+                <p className="mt-3 text-sm font-bold text-slate-900">No Eligible Enrollments</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Every active enrollment in your current context already has a fee account, or no active enrollments exist.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={(event) => void createFeeAccount(event)} className="mt-5 space-y-4">
+                <label className="block text-xs font-bold text-slate-700">
+                  Student Enrollment
+                  <select
+                    value={selectedEnrollmentId}
+                    onChange={(event) => setSelectedEnrollmentId(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-teal-500"
+                  >
+                    {setupOptions.map((option) => (
+                      <option key={option.enrollment_id} value={option.enrollment_id}>
+                        {option.student_name} - {option.admission_number ?? "No Admission No"} - {option.academic_year}
+                        {option.programme_name ? ` - ${option.programme_name}` : ""}
+                        {option.section_name ? ` - ${option.section_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Assigned Fee
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={assignedFeeAmount}
+                      onChange={(event) => setAssignedFeeAmount(event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                    />
+                  </label>
+                  <label className="block text-xs font-bold text-slate-700">
+                    Government Scholarship
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={scholarshipAmount}
+                      onChange={(event) => setScholarshipAmount(event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                    />
+                  </label>
+                  <label className="block text-xs font-bold text-slate-700">
+                    Concession
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={concessionAmount}
+                      onChange={(event) => setConcessionAmount(event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Schedule Type
+                    <select
+                      value={paymentScheduleType}
+                      onChange={(event) =>
+                        setPaymentScheduleType(event.target.value as FeeAccountCreatePayload["payment_schedule_type"])
+                      }
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                    >
+                      <option value="ONE_TIME">One Time</option>
+                      <option value="TERM_WISE">Term Wise</option>
+                      <option value="INSTALLMENT_WISE">Installment Wise</option>
+                      <option value="CUSTOM">Custom</option>
+                    </select>
+                  </label>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Net Payable</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950">
+                      {money(
+                        String(
+                          Math.max(
+                            0,
+                            Number(assignedFeeAmount || "0") -
+                              Number(scholarshipAmount || "0") -
+                              Number(concessionAmount || "0")
+                          )
+                        )
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => closeSetupModal()}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "Creating..." : "Create Fee Account"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && selectedPaymentAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Record Payment</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {selectedPaymentAccount.student_name} - {selectedPaymentAccount.admission_number ?? "No Admission No"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closePaymentModal()}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs md:grid-cols-3">
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Net Payable</p>
+                <p className="mt-1 font-mono text-sm font-bold text-slate-950">{money(selectedPaymentAccount.net_payable_amount)}</p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Already Paid</p>
+                <p className="mt-1 font-mono text-sm font-bold text-emerald-700">{money(selectedPaymentAccount.total_paid_amount)}</p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Outstanding</p>
+                <p className="mt-1 font-mono text-sm font-bold text-rose-700">{money(selectedPaymentAccount.outstanding_amount)}</p>
+              </div>
+            </div>
+
+            {paymentError && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+                <AlertCircle className="h-4 w-4" />
+                {paymentError}
+              </div>
+            )}
+
+            {lastReceiptNumber && (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+                Last receipt generated: {lastReceiptNumber}
+              </div>
+            )}
+
+            <form onSubmit={(event) => void postPayment(event)} className="mt-5 space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="block text-xs font-bold text-slate-700">
+                  Payment Amount
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    value={paymentAmount}
+                    onChange={(event) => setPaymentAmount(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-700">
+                  Payment Mode
+                  <select
+                    value={paymentMode}
+                    onChange={(event) => setPaymentMode(event.target.value as FeePaymentCreatePayload["payment_mode"])}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  >
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="CARD">Card</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-bold text-slate-700">
+                  Receipt Date
+                  <input
+                    type="date"
+                    required
+                    value={receiptDate}
+                    onChange={(event) => setReceiptDate(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="block text-xs font-bold text-slate-700">
+                  Reference No
+                  <input
+                    value={externalReference}
+                    onChange={(event) => setExternalReference(event.target.value)}
+                    placeholder="UPI / cheque / bank ref"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-700">
+                  Period Label
+                  <input
+                    value={paymentPeriodLabel}
+                    onChange={(event) => setPaymentPeriodLabel(event.target.value)}
+                    placeholder="Term 1 / Installment 2"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-700">
+                  Installment No
+                  <input
+                    type="number"
+                    min="1"
+                    value={installmentNumber}
+                    onChange={(event) => setInstallmentNumber(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                  />
+                </label>
+              </div>
+
+              <label className="block text-xs font-bold text-slate-700">
+                Notes
+                <textarea
+                  value={paymentNotes}
+                  onChange={(event) => setPaymentNotes(event.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-teal-500"
+                />
+              </label>
+
+              <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => closePaymentModal()}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={paymentSaving}
+                  className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {paymentSaving ? "Posting..." : "Post Payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showLedgerModal && selectedLedgerAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Fee Ledger</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {selectedLedgerAccount.student_name} -{" "}
+                  {selectedLedgerAccount.admission_number ?? "No Admission No"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeLedgerModal()}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs md:grid-cols-4">
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Assigned</p>
+                <p className="mt-1 font-mono text-sm font-bold text-slate-950">
+                  {money(selectedLedgerAccount.assigned_fee_amount)}
+                </p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Discounts</p>
+                <p className="mt-1 font-mono text-sm font-bold text-slate-950">
+                  {money(
+                    String(
+                      Number(selectedLedgerAccount.scholarship_amount) +
+                        Number(selectedLedgerAccount.concession_amount)
+                    )
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Paid</p>
+                <p className="mt-1 font-mono text-sm font-bold text-emerald-700">
+                  {money(selectedLedgerAccount.total_paid_amount)}
+                </p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-slate-400">Outstanding</p>
+                <p className="mt-1 font-mono text-sm font-bold text-rose-700">
+                  {money(selectedLedgerAccount.outstanding_amount)}
+                </p>
+              </div>
+            </div>
+
+            {ledgerError && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+                <AlertCircle className="h-4 w-4" />
+                {ledgerError}
+              </div>
+            )}
+
+            <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200">
+              {ledgerLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-xs font-semibold text-slate-400">
+                  <RefreshCw className="h-5 w-5 animate-spin text-teal-600" />
+                  Loading ledger...
+                </div>
+              ) : ledgerEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <ReceiptText className="h-9 w-9 text-slate-300" />
+                  <p className="mt-3 text-sm font-bold text-slate-900">No Ledger Entries Found</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Ledger entries appear after fee assignment, scholarship, concession or payment posting.
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-[420px] overflow-auto">
+                  <table className="min-w-[1180px] w-full border-collapse text-left text-xs">
+                    <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="border-b border-slate-200 px-4 py-3">Date</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Type</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Effect</th>
+                        <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Receipt</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Mode</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Period</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Reference</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Posted By</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Status</th>
+                        <th className="border-b border-slate-200 px-4 py-3">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ledgerEntries.map((entry) => (
+                        <tr key={entry.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-mono text-slate-700">
+                            {entry.receipt_date ?? entry.entry_date}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-950">
+                            {ledgerTypeLabel(entry.entry_type)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {ledgerTypeLabel(entry.balance_effect)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">
+                            {money(entry.amount)}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-teal-700">
+                            {entry.receipt_number ?? "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {entry.payment_mode ? ledgerTypeLabel(entry.payment_mode) : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {entry.payment_period_label ?? "-"}
+                            {entry.installment_number ? ` / ${entry.installment_number}` : ""}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {entry.external_reference ?? "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {entry.posted_by_name ?? "-"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                              {entry.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">{entry.notes ?? "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => closeLedgerModal()}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

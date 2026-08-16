@@ -81,6 +81,15 @@ export type CommitBatchResponse = {
 
 export const importsApi = {
   downloadStudentTemplate: () => apiDownloadBlob("/imports/students/template"),
+  downloadFeeTemplate: () => apiDownloadBlob("/imports/fees/template"),
+  uploadFeeTemplate: (file: File, branchId?: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (branchId) {
+      formData.append("branch_id", branchId);
+    }
+    return apiPostForm<UploadResponse>("/imports/fees/upload", formData);
+  },
   uploadStudentTemplate: (file: File, branchId: string) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -105,5 +114,10 @@ export const importsApi = {
   correctPreviewRow: (batchId: string, rowId: string, rawData: Record<string, unknown>) =>
     apiPatch<PreviewResponse>(`/imports/students/batches/${batchId}/rows/${rowId}`, { raw_data: rawData }),
   commitBatch: (batchId: string) =>
-    apiPost<CommitBatchResponse>(`/imports/students/batches/${batchId}/commit`, {})
+    apiPost<CommitBatchResponse>(`/imports/students/batches/${batchId}/commit`, {}),
+  getFeePreview: (batchId: string) => apiGet<PreviewResponse>(`/imports/fees/batches/${batchId}/preview`),
+  correctFeePreviewRow: (batchId: string, rowId: string, rawData: Record<string, unknown>) =>
+    apiPatch<PreviewResponse>(`/imports/fees/batches/${batchId}/rows/${rowId}`, { raw_data: rawData }),
+  commitFeeBatch: (batchId: string) =>
+    apiPost<CommitBatchResponse>(`/imports/fees/batches/${batchId}/commit`, {})
 };

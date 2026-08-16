@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { UserPlus, UploadCloud, ArrowRight } from "lucide-react";
+import { ArrowRight, IndianRupee, UploadCloud, UserPlus } from "lucide-react";
 
 export function StudentImportCenter() {
   const navigate = useNavigate();
@@ -7,13 +7,13 @@ export function StudentImportCenter() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Student Import Center</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Import Center</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Choose how you would like to onboard students into the system.
+          Choose the operational upload workflow you want to use.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Manual Add Card */}
         <div 
           onClick={() => navigate("/imports/manual")}
@@ -46,6 +46,24 @@ export function StudentImportCenter() {
           </p>
           <div className="flex items-center text-sm font-medium text-emerald-600 group-hover:text-emerald-700">
             Import Students
+            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </div>
+        </div>
+
+        {/* Fee Import Card */}
+        <div
+          onClick={() => navigate("/imports/fees")}
+          className="group flex cursor-pointer flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-teal-300 hover:shadow-md"
+        >
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 transition-colors group-hover:bg-teal-100">
+            <IndianRupee className="h-6 w-6 text-teal-600" />
+          </div>
+          <h2 className="mb-2 text-lg font-semibold text-gray-900">Fee Data Import</h2>
+          <p className="mb-6 flex-grow text-sm text-gray-600">
+            Download the bulk fee setup template for active enrollments. Upload and validation will be completed in the next phase.
+          </p>
+          <div className="flex items-center text-sm font-medium text-teal-600 group-hover:text-teal-700">
+            Download Fee Template
             <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
           </div>
         </div>

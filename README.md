@@ -51,3 +51,17 @@ X-Access-Assignment-ID: <selected-assignment-id>
 ```
 
 The frontend must not use Supabase to read or write application `sms_*` tables, and it must not contain backend database URLs, password hashes, or application token signing secrets.
+
+## Fee Module Checkpoint
+
+The Fees navigation entry now opens `src/modules/fees/pages/FeesPage.tsx`.
+
+The page reads real fee account data from:
+
+```text
+GET /api/v1/fees/accounts
+```
+
+It shows totals and account rows returned by the backend. It does not create fake finance data, post payments, generate receipts or approve adjustments yet.
+
+Users with `fee.basic_assign` can open the setup modal and create the first fee account for an active enrollment. The frontend sends only enrollment and amount inputs; the backend derives tenant, branch, student and academic year from the protected context and enrollment.

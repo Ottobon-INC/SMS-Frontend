@@ -13,6 +13,8 @@ import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
 import { BranchDashboardShellPage } from "../../modules/dashboard/pages/BranchDashboardShellPage";
 import { DashboardShellPage } from "../../modules/dashboard/pages/DashboardShellPage";
 import { ExaminationsContainer } from "../../modules/examinations/routes";
+import { FeesPage } from "../../modules/fees/pages/FeesPage";
+import { FeeTemplatePage } from "../../modules/imports/pages/FeeTemplatePage";
 import { ImportResultSummary } from "../../modules/imports/pages/ImportResultSummary";
 import { ImportValidationPreview } from "../../modules/imports/pages/ImportValidationPreview";
 import { ManualAddStudentPage } from "../../modules/imports/pages/ManualAddStudentPage";
@@ -24,7 +26,7 @@ import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/P
 import { StudentsPage } from "../../modules/students/pages/StudentsPage";
 import { UsersPage } from "../../modules/users/pages/UsersPage";
 
-const moduleRoutes = ["fees", "attendance", "notifications", "reports", "audit", "support"];
+const moduleRoutes = ["attendance", "notifications", "reports", "audit", "support"];
 
 function protectedPage(
   path: string,
@@ -80,6 +82,10 @@ const router = createBrowserRouter([
             module: "examinations",
             permission: "exam.view"
           }),
+          protectedPage("/fees", <FeesPage />, {
+            module: "fees",
+            permission: "fee.view"
+          }),
           protectedPage("/imports", <StudentImportCenter />, {
             module: "imports",
             permission: "import.view"
@@ -92,11 +98,23 @@ const router = createBrowserRouter([
             module: "imports",
             permission: "import.view"
           }),
+          protectedPage("/imports/fees", <FeeTemplatePage />, {
+            module: "imports",
+            permission: "import.view"
+          }),
           protectedPage("/imports/preview/:batchId", <ImportValidationPreview />, {
             module: "imports",
             permission: "import.view"
           }),
+          protectedPage("/imports/fees/preview/:batchId", <ImportValidationPreview importType="fees" />, {
+            module: "imports",
+            permission: "import.view"
+          }),
           protectedPage("/imports/summary/:batchId", <ImportResultSummary />, {
+            module: "imports",
+            permission: "import.view"
+          }),
+          protectedPage("/imports/fees/summary/:batchId", <ImportResultSummary importType="fees" />, {
             module: "imports",
             permission: "import.view"
           }),
