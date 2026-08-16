@@ -60,8 +60,27 @@ The page reads real fee account data from:
 
 ```text
 GET /api/v1/fees/accounts
+GET /api/v1/fees/accounts/{account_id}/ledger
 ```
 
-It shows totals and account rows returned by the backend. It does not create fake finance data, post payments, generate receipts or approve adjustments yet.
+It shows totals and account rows returned by the backend. It does not create fake finance data.
 
 Users with `fee.basic_assign` can open the setup modal and create the first fee account for an active enrollment. The frontend sends only enrollment and amount inputs; the backend derives tenant, branch, student and academic year from the protected context and enrollment.
+
+Users with `fee.payment_record` can record a payment when a fee account has outstanding dues. The
+payment modal sends amount, payment mode, receipt date, optional reference, optional period or
+installment, and notes to the backend.
+
+Every visible fee account has a `View Ledger` action for users with `fee.view`. The ledger modal is
+read-only and shows fee assignment, scholarship, concession, payment rows, receipt number, payment
+mode, receipt date, posted-by information, references, period/installment, and notes.
+
+Bulk fee setup is handled from the Imports module, not by duplicating a second bulk upload flow in
+the Fees page.
+
+Still deferred:
+
+- Receipt PDF/download.
+- Payment reversal.
+- Fee adjustment approval workflow.
+- Parent Portal fee view.
