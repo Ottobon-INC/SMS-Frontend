@@ -90,10 +90,13 @@ export const importsApi = {
     }
     return apiPostForm<UploadResponse>("/imports/fees/upload", formData);
   },
-  uploadStudentTemplate: (file: File, branchId: string) => {
+  uploadStudentTemplate: (file: File, branchId?: string) => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("branch_id", branchId);
+    // Only include branch_id if explicitly provided — omitting it allows multi-branch Excel imports
+    if (branchId) {
+      formData.append("branch_id", branchId);
+    }
     return apiPostForm<UploadResponse>("/imports/students/upload", formData);
   },
   getBranches: () => apiGet<LookupItem[]>("/imports/students/lookups/branches"),

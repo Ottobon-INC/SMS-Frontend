@@ -88,6 +88,15 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return parseResponse<T>(response);
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    method: "PUT",
+    headers: await buildHeaders(),
+    body: JSON.stringify(body)
+  });
+  return parseResponse<T>(response);
+}
+
 export async function apiDownloadBlob(path: string): Promise<Blob> {
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     headers: await buildHeaders()

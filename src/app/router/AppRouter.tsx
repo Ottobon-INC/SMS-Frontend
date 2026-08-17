@@ -25,8 +25,10 @@ import { ParentPortalShellPage } from "../../modules/parent-portal/pages/ParentP
 import { PlatformDashboardShellPage } from "../../modules/platform-admin/pages/PlatformDashboardShellPage";
 import { StudentsPage } from "../../modules/students/pages/StudentsPage";
 import { UsersPage } from "../../modules/users/pages/UsersPage";
+import { AttendanceLandingPage } from "../../modules/attendance/pages/AttendanceLandingPage";
+import { AttendanceSessionPage } from "../../modules/attendance/pages/AttendanceSessionPage";
 
-const moduleRoutes = ["attendance", "notifications", "reports", "audit", "support"];
+const moduleRoutes = ["notifications", "reports", "audit", "support"];
 
 function protectedPage(
   path: string,
@@ -118,6 +120,14 @@ const router = createBrowserRouter([
             module: "imports",
             permission: "import.view"
           }),
+          protectedPage("/attendance", <AttendanceLandingPage />, {
+            module: "attendance",
+            permission: "attendance.view"
+          }),
+          protectedPage("/attendance/session/:sessionId", <AttendanceSessionPage />, {
+            module: "attendance",
+            permission: "attendance.view"
+          }),
           ...moduleRoutes.map((moduleName) => ({
             element: (
               <ProtectedRoute
@@ -125,11 +135,9 @@ const router = createBrowserRouter([
                 permission={
                   moduleName === "fees"
                     ? "fee.view"
-                    : moduleName === "attendance"
-                      ? "attendance.view"
-                      : moduleName === "notifications"
-                        ? "notification.view"
-                        : moduleName === "reports"
+                    : moduleName === "notifications"
+                      ? "notification.view"
+                      : moduleName === "reports"
                           ? "report.branch_view"
                           : moduleName === "audit"
                             ? "audit.view"
