@@ -81,8 +81,52 @@ export const BranchesPage: React.FC = () => {
   const [showAssignPrincipalModal, setShowAssignPrincipalModal] = useState<boolean>(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [principalUserId, setPrincipalUserId] = useState<string>('');
+
+  // Manage Programme Offerings Modal State
+  const [showProgrammesModal, setShowProgrammesModal] = useState<boolean>(false);
+  const [programmesBranch, setProgrammesBranch] = useState<Branch | null>(null);
+  const [allMasterProgrammes, setAllMasterProgrammes] = useState<any[]>([]);
+  const [assignedProgIds, setAssignedProgIds] = useState<string[]>([]);
+  const [loadingProgrammesData, setLoadingProgrammesData] = useState<boolean>(false);
   
   const [notification, setNotification] = useState<string | null>(null);
+
+  const fetchMasterProgrammes = async () => {
+    try {
+      const res = await fetch('/api/v1/academic-structure/programmes');
+      if (res.ok) {
+        const data = await res.json();
+        setAllMasterProgrammes(data);
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to fetch master programmes:', err);
+    }
+    return [];
+  };
+
+  const handleOpenProgrammesModal = async (branch: Branch) => {
+    setProgrammesBranch(branch);
+    setShowProgrammesModal(true);
+    setLoadingProgrammesData(true);
+    setAssignedProgIds([]);
+
+    try {
+      if (allMasterProgrammes.length === 0) {
+        await fetchMasterProgrammes();
+      }
+      const branchRes = await fetch(`/api/v1/branches/${branch.id}/programmes`);
+
+      if (branchRes.ok) {
+        const data = await branchRes.json();
+        setAssignedProgIds(data.map((p: any) => p.id));
+      }
+    } catch (err) {
+      console.error('Failed to fetch assigned branch programmes:', err);
+    } finally {
+      setLoadingProgrammesData(false);
+    }
+  };
 
   const fetchBranches = async () => {
     setLoading(true);
@@ -118,6 +162,7 @@ export const BranchesPage: React.FC = () => {
   useEffect(() => {
     fetchBranches();
     fetchUsers();
+    fetchMasterProgrammes();
   }, []);
 
   const handleAddBranch = async (e: React.FormEvent) => {
@@ -463,7 +508,7 @@ export const BranchesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex gap-2">
                 <button
                   onClick={() => {
                     setSelectedBranch(b);
@@ -471,9 +516,15 @@ export const BranchesPage: React.FC = () => {
                     setPrincipalUserId(assignedUser?.id || systemUsers[0]?.id || '');
                     setShowAssignPrincipalModal(true);
                   }}
-                  className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-1 cursor-pointer"
                 >
-                  <UserCheck className="w-3.5 h-3.5 text-teal-600" /> Assign Campus Principal
+                  <UserCheck className="w-3.5 h-3.5 text-teal-600" /> Assign Principal
+                </button>
+                <button
+                  onClick={() => handleOpenProgrammesModal(b)}
+                  className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" /> Offered Streams
                 </button>
               </div>
             </div>
@@ -751,6 +802,70 @@ export const BranchesPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CAMPUS PROGRAMME OFFERINGS SUMMARY MODAL (READ-ONLY) */}
+      {showProgrammesModal && programmesBranch && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-600" /> Active Campus Stream Offerings
+              </h3>
+              <button onClick={() => setShowProgrammesModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Read-only overview of course streams offered at <strong className="text-slate-900">{programmesBranch.name}</strong> for the current Academic Term. Master offerings are managed centrally in the <strong className="text-indigo-600">Academic Structure Matrix</strong>.
+            </p>
+
+            <div className="space-y-2 max-h-64 overflow-y-auto p-3 bg-slate-50 rounded-2xl border border-slate-200 min-h-[140px] flex flex-col justify-center">
+              {loadingProgrammesData ? (
+                <div className="py-8 text-center text-xs font-semibold text-slate-500 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" /> Loading campus streams...
+                </div>
+              ) : (
+                allMasterProgrammes.map((p) => {
+                  const isOffered = assignedProgIds.includes(p.id);
+                  return (
+                    <div key={p.id} className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                      <div>
+                        <span className="font-bold text-slate-900 block text-xs">{p.code} — {p.name}</span>
+                        {p.coachingTrack && (
+                          <span className="text-[10px] text-slate-500 font-medium">Coaching: {p.coachingTrack}</span>
+                        )}
+                      </div>
+                      {isOffered ? (
+                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                          ✓ Offered
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-slate-100 text-slate-400 text-[10px] font-medium rounded-lg">
+                          Not Offered
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              {!loadingProgrammesData && allMasterProgrammes.length === 0 && (
+                <div className="text-center py-4 text-slate-400">No master programmes found.</div>
+              )}
+            </div>
+
+            <div className="pt-2 font-bold">
+              <button
+                type="button"
+                onClick={() => setShowProgrammesModal(false)}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Close Summary
+              </button>
+            </div>
           </div>
         </div>
       )}

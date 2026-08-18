@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, Subject, Programme, Branch } from '../types';
-import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning } from 'lucide-react';
+import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle } from 'lucide-react';
 
 export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   onNavigateToMarksEntry,
@@ -11,6 +11,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showExemptBranchModal, setShowExemptBranchModal] = useState(false);
   const [returnReason, setReturnReason] = useState('');
@@ -42,6 +43,8 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
     { id: '77777777-7777-7777-7777-777777777775', code: 'CHEM-101', name: 'Chemistry 1', maxMarks: 60, passMarks: 21 },
   ]);
 
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
+
   // Dynamic Master Data Loading from Live Backend APIs
   useEffect(() => {
     examinationsApi.getBranches().then((b) => {
@@ -61,8 +64,11 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
       if (s && s.length > 0) setAllSubjects(s);
     });
     examinationsApi.getAcademicYears().then((years) => {
-      const activeYear = years.find((year) => year.isDefault) ?? years[0];
-      if (activeYear) setAcademicYearId(activeYear.id);
+      if (years && years.length > 0) {
+        setAcademicYears(years);
+        const activeYear = years.find((year) => year.isDefault) ?? years[0];
+        if (activeYear) setAcademicYearId(activeYear.id);
+      }
     });
   }, []);
 
@@ -80,6 +86,48 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
 
   const [subjectConfigs, setSubjectConfigs] = useState<Record<string, { maxMarks: number; passMarks: number }>>({});
   const [optedOutSubjectIds, setOptedOutSubjectIds] = useState<string[]>([]);
+
+  // Dynamically re-filter available programmes based on selected audience scope & branches
+  useEffect(() => {
+    let fetchPromises: Promise<Programme[]>[];
+
+    if (examScope === 'ALL_BRANCHES') {
+      fetchPromises = [
+        fetch('/api/v1/branches/ALL/programmes').then((res) => (res.ok ? res.json() : [])),
+      ];
+    } else if (examScope === 'SELECTED_BRANCHES') {
+      if (selectedBranchIds.length === 0) return;
+      fetchPromises = selectedBranchIds.map((bId) =>
+        fetch(`/api/v1/branches/${bId}/programmes`).then((res) => (res.ok ? res.json() : []))
+      );
+    } else {
+      if (!selectedBranchId) return;
+      fetchPromises = [
+        fetch(`/api/v1/branches/${selectedBranchId}/programmes`).then((res) => (res.ok ? res.json() : [])),
+      ];
+    }
+
+    Promise.all(fetchPromises)
+      .then((results) => {
+        const combined = results.flat();
+        const uniqueProgsMap = new Map<string, Programme>();
+        combined.forEach((p) => {
+          if (p && p.id && !uniqueProgsMap.has(p.id)) {
+            uniqueProgsMap.set(p.id, p);
+          }
+        });
+        const branchProgs = Array.from(uniqueProgsMap.values());
+
+        if (branchProgs.length > 0) {
+          setProgrammes(branchProgs);
+          setSelectedProgrammeIds((prev) => {
+            const valid = prev.filter((id) => branchProgs.some((bp) => bp.id === id));
+            return valid.length > 0 ? valid : branchProgs.map((bp) => bp.id);
+          });
+        }
+      })
+      .catch((err) => console.error('Failed to load branch-scoped programmes:', err));
+  }, [examScope, selectedBranchId, selectedBranchIds]);
 
   // Simulated Dean role
   const isDean = true;
@@ -198,12 +246,22 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
 
   const handlePublishExamResults = async () => {
     if (!examToPublish) return;
-    await examinationsApi.publishExam(examToPublish);
-    setShowPublishModal(false);
-    setExamToPublish(null);
-    loadExams();
-    setNotification('Results published successfully!');
-    setTimeout(() => setNotification(null), 5000);
+    setPublishError(null);
+    try {
+      await examinationsApi.publishExam(examToPublish);
+      setShowPublishModal(false);
+      setExamToPublish(null);
+      setPublishError(null);
+      loadExams();
+      setNotification('Assessment results published! WhatsApp parent notifications dispatched on server.');
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err: unknown) {
+      setPublishError(
+        err instanceof Error
+          ? err.message
+          : 'Cannot publish assessment until all active student sections submit marks.',
+      );
+    }
   };
 
   const handleReturnExam = async () => {
@@ -311,20 +369,20 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                         exam.status === 'PUBLISHED'
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                           : exam.status === 'SUBMITTED'
-                          ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                          ? 'bg-teal-100 text-teal-800 border border-teal-200 font-extrabold shadow-2xs'
                           : exam.status === 'RETURNED_FOR_CORRECTION'
                           ? 'bg-rose-100 text-rose-800 border border-rose-200'
                           : 'bg-amber-100 text-amber-800 border border-amber-200'
                       }`}
                     >
-                      {exam.status.replace(/_/g, ' ')}
+                      {exam.status === 'SUBMITTED' ? 'READY TO PUBLISH' : exam.status.replace(/_/g, ' ')}
                     </span>
                     <span className="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-semibold border border-slate-200">
                       Scope: {exam.scope || 'SINGLE_BRANCH'}
                     </span>
                   </div>
                   <p className="text-slate-500 text-xs">
-                    Academic Year: {exam.academicYearId} • Type: {exam.type} • Date: {exam.examDate}
+                    Academic Year: <strong className="text-slate-800 font-semibold">{academicYears.find((y) => y.id === exam.academicYearId)?.name || '2026–2027'}</strong> • Type: {exam.type} • Date: {exam.examDate}
                   </p>
                   {exam.excludedBranchIds && exam.excludedBranchIds.length > 0 && (
                     <div className="mt-1.5 p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-900 text-[11px] font-semibold flex items-center gap-1.5">
@@ -353,17 +411,16 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                     </button>
                   )}
 
-                  {(exam.scope === 'ALL_BRANCHES' || exam.scope === 'SELECTED_BRANCHES') && (
-                    <button
-                      onClick={() => {
-                        setExamToExempt(exam.id);
-                        setShowExemptBranchModal(true);
-                      }}
-                      className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-purple-600" /> Exempt Campus
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setExamToExempt(exam.id);
+                      setShowExemptBranchModal(true);
+                    }}
+                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                    title="Exempt or opt-out a campus branch from this assessment"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-purple-600" /> Exempt / Opt-Out Campus
+                  </button>
 
                   {exam.status === 'SUBMITTED' && (
                     <button
@@ -432,16 +489,35 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
             )}
 
             <form onSubmit={handleCreateExam} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Assessment / Exam Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Unit Test 1 or Mid-Term Exam 2026"
-                  value={examName}
-                  onChange={(e) => setExamName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-teal-500 outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Assessment / Exam Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Unit Test 1 or Mid-Term Exam 2026"
+                    value={examName}
+                    onChange={(e) => setExamName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Target Academic Year *</label>
+                  <select
+                    value={academicYearId}
+                    onChange={(e) => setAcademicYearId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {academicYears.map((ay) => (
+                      <option key={ay.id} value={ay.id}>
+                        {ay.name} ({ay.code}) {ay.isDefault ? '— Active Term' : ''}
+                      </option>
+                    ))}
+                    {academicYears.length === 0 && (
+                      <option value="2026-2027">2026–2027 Academic Year</option>
+                    )}
+                  </select>
+                </div>
               </div>
 
               {/* Audience Scope */}
@@ -770,11 +846,27 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
             <h3 className="text-base font-bold text-slate-900">Approve & Publish Results</h3>
             <p className="text-xs text-slate-500">Publishing makes report cards visible on the Parent Portal.</p>
 
+            {publishError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                  <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Publish Blocked</span>
+                </div>
+                <p className="text-[11px] leading-relaxed font-normal">{publishError}</p>
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2 text-xs font-bold">
-              <button onClick={() => setShowPublishModal(false)} className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-xl">
+              <button
+                onClick={() => {
+                  setShowPublishModal(false);
+                  setPublishError(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
+              >
                 Cancel
               </button>
-              <button onClick={handlePublishExamResults} className="flex-1 py-2 bg-indigo-600 text-white rounded-xl">
+              <button onClick={handlePublishExamResults} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl cursor-pointer">
                 Approve & Publish
               </button>
             </div>
@@ -784,3 +876,12 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
     </div>
   );
 };
+interface AcademicYear {
+  id: string;
+  code: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  status: string;
+  isDefault: boolean;
+}
