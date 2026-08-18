@@ -16,5 +16,17 @@ export const academicStructureApi = {
 
   createProgramme(payload: ProgrammePayload): Promise<Programme> {
     return apiPost<Programme>("/academic-structure/programmes", payload);
+  },
+
+  getAcademicYears(): Promise<any[]> {
+    return apiGet<any[]>("/academic-structure/academic-years");
+  },
+
+  createAcademicYear(payload: any): Promise<any> {
+    return apiPost<any>("/academic-structure/academic-years", payload);
+  },
+
+  setDefaultAcademicYear(id: string): Promise<any> {
+    return apiPost<any>(`/academic-structure/academic-years/${id}/default`, {});
   }
 } as const;

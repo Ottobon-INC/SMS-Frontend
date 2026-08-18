@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, StudentExamRecord } from '../types';
 import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2 } from 'lucide-react';
@@ -12,8 +12,26 @@ interface StudentItem {
 
 export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [exams, setExams] = useState<Exam[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [selectedExamId, setSelectedExamId] = useState<string>('');
-  const [selectedSectionId] = useState<string>('sec-mpc-a');
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+  const [sections, setSections] = useState<any[]>([]);
+  const [selectedStreamCode, setSelectedStreamCode] = useState<string>('ALL');
+
+  const availableStreamCodes = useMemo(() => {
+    const set = new Set<string>();
+    sections.forEach((sec: any) => {
+      const code = sec.name ? sec.name.split('-')[0] : '';
+      if (code) set.add(code);
+    });
+    return Array.from(set);
+  }, [sections]);
+
+  const filteredSections = useMemo(() => {
+    if (selectedStreamCode === 'ALL') return sections;
+    return sections.filter((sec: any) => sec.name && sec.name.startsWith(selectedStreamCode));
+  }, [sections, selectedStreamCode]);
   const [notification, setNotification] = useState<string | null>(null);
 
   const [recordsMap, setRecordsMap] = useState<Record<string, StudentExamRecord>>({});
@@ -22,61 +40,178 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewStudent, setPreviewStudent] = useState<StudentItem | null>(null);
 
-  // Mock Students
-  const mockStudents: StudentItem[] = [
-    { id: 'st-01', admissionNumber: 'ADM-2026-001', firstName: 'Aarav', lastName: 'Sharma' },
-    { id: 'st-02', admissionNumber: 'ADM-2026-002', firstName: 'Ananya', lastName: 'Reddy' },
-    { id: 'st-03', admissionNumber: 'ADM-2026-003', firstName: 'Karthik', lastName: 'Venkatesh' },
-    { id: 'st-04', admissionNumber: 'ADM-2026-004', firstName: 'Priya', lastName: 'Nair' },
-  ];
+  // Unsaved Changes Navigation Guard state
+  const [isDirty, setIsDirty] = useState(false);
+  const [showUnsavedWarningModal, setShowUnsavedWarningModal] = useState(false);
+  const [pendingTargetSectionId, setPendingTargetSectionId] = useState<string | null>(null);
 
-  // Mock Subjects for selected exam
-  const displaySubjects: ExamSubject[] = [
-    { id: 'exsub-1', examId: selectedExamId, subjectId: 'sub-eng', subjectName: 'English 1', subjectCode: 'ENG-101', maximumMarks: 100, passMarks: 35 },
-    { id: 'exsub-2', examId: selectedExamId, subjectId: 'sub-sans', subjectName: 'Sanskrit 1', subjectCode: 'SAN-101', maximumMarks: 100, passMarks: 35 },
-    { id: 'exsub-3', examId: selectedExamId, subjectId: 'sub-m1a', subjectName: 'Maths 1A', subjectCode: 'MATH-1A', maximumMarks: 75, passMarks: 26 },
-    { id: 'exsub-4', examId: selectedExamId, subjectId: 'sub-p1', subjectName: 'Physics 1', subjectCode: 'PHY-101', maximumMarks: 60, passMarks: 21 },
-  ];
+  const [sectionStudents, setSectionStudents] = useState<StudentItem[]>([]);
 
   const selectedExam = exams.find((e) => e.id === selectedExamId);
 
+  const allowedBranches = useMemo(() => {
+    if (!selectedExam) return branches;
+    if (selectedExam.scope === 'SINGLE_BRANCH') {
+      const targetId = selectedExam.branchId;
+      if (targetId) {
+        const filtered = branches.filter((b) => b.id === targetId);
+        if (filtered.length > 0) return filtered;
+      }
+    } else if (selectedExam.scope === 'SELECTED_BRANCHES') {
+      const targetIds = selectedExam.branchIds || [];
+      if (targetIds.length > 0) {
+        const filtered = branches.filter((b) => targetIds.includes(b.id));
+        if (filtered.length > 0) return filtered;
+      }
+    }
+    return branches;
+  }, [branches, selectedExam]);
+
   useEffect(() => {
+    if (allowedBranches.length > 0) {
+      if (!allowedBranches.some((b) => b.id === selectedBranchId)) {
+        setSelectedBranchId(allowedBranches[0].id);
+      }
+    }
+  }, [allowedBranches, selectedBranchId]);
+
+  useEffect(() => {
+    examinationsApi.getBranches().then((bList) => {
+      setBranches(bList);
+      if (bList && bList.length > 0) {
+        setSelectedBranchId(bList[0].id);
+      }
+    });
     examinationsApi.getExams().then((list) => {
       setExams(list);
       if (list.length > 0) setSelectedExamId(list[0].id);
     });
   }, []);
 
+  const [allExamSubjects, setAllExamSubjects] = useState<ExamSubject[]>([]);
+
+  // Load real exam subjects for selected exam
   useEffect(() => {
-    if (!selectedExamId) return;
+    if (!selectedExamId) {
+      setAllExamSubjects([]);
+      return;
+    }
+    examinationsApi.getExamSubjects(selectedExamId).then((subList) => {
+      setAllExamSubjects(subList || []);
+    });
+  }, [selectedExamId]);
+
+  // Dynamically filter displaySubjects for the selected section's stream/programme
+  const displaySubjects = useMemo(() => {
+    if (!selectedSectionId || allExamSubjects.length === 0) return allExamSubjects;
+    const activeSec = sections.find((s) => s.id === selectedSectionId);
+    if (!activeSec || !activeSec.name) return allExamSubjects;
+
+    const streamCode = activeSec.name.split('-')[0].toUpperCase();
+
+    // Map stream code to relevant subjects
+    const allowedKeywords: Record<string, string[]> = {
+      MPC: ['MATH', 'PHYSIC', 'CHEMIS', 'ENG', 'SAN', 'TELUGU'],
+      BIPC: ['BOTANY', 'ZOOLOGY', 'PHYSIC', 'CHEMIS', 'ENG', 'SAN', 'TELUGU'],
+      CEC: ['CIVIC', 'COMMERCE', 'ECONOM', 'ENG', 'SAN', 'TELUGU'],
+      MEC: ['MATH', 'COMMERCE', 'ECONOM', 'ENG', 'SAN', 'TELUGU'],
+      HEC: ['HISTORY', 'ECONOM', 'CIVIC', 'ENG', 'SAN', 'TELUGU'],
+    };
+
+    const keywords = allowedKeywords[streamCode];
+    if (!keywords) return allExamSubjects;
+
+    return allExamSubjects.filter((sub) => {
+      const nameUpper = (sub.subjectName || sub.subjectCode || '').toUpperCase();
+      return keywords.some((kw) => nameUpper.includes(kw));
+    });
+  }, [allExamSubjects, selectedSectionId, sections]);
+
+  // Load real enrolled students for selected section
+  useEffect(() => {
+    if (!selectedSectionId) {
+      setSectionStudents([]);
+      return;
+    }
+    fetch(`/api/v1/students?section_id=${selectedSectionId}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((stList) => {
+        const mapped = (stList || []).map((s: any) => ({
+          id: s.id,
+          admissionNumber: s.admissionNumber || s.studentNumber || 'STD-001',
+          firstName: s.displayName ? s.displayName.split(' ')[0] : s.name || 'Student',
+          lastName: s.displayName && s.displayName.split(' ').length > 1 ? s.displayName.split(' ').slice(1).join(' ') : '',
+        }));
+        setSectionStudents(mapped);
+      })
+      .catch(() => setSectionStudents([]));
+  }, [selectedSectionId]);
+
+  // Dynamically load sections for the selected branch & exam
+  const fetchSections = async () => {
+    if (!selectedBranchId) return;
+    const url = `/api/v1/branches/${selectedBranchId}/sections${selectedExamId ? `?exam_id=${selectedExamId}` : ''}`;
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const secList = await res.json();
+        if (secList && secList.length > 0) {
+          setSections(secList);
+          if (!selectedSectionId || !secList.some((s: any) => s.id === selectedSectionId)) {
+            setSelectedSectionId(secList[0].id);
+          }
+        } else {
+          setSections([]);
+          setSelectedSectionId('');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load branch sections:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSections();
+  }, [selectedBranchId, selectedExamId]);
+
+  useEffect(() => {
+    if (!selectedExamId || !selectedSectionId) return;
     examinationsApi.getStudentExamRecords(selectedExamId, selectedSectionId).then((records) => {
       const map: Record<string, StudentExamRecord> = {};
-      mockStudents.forEach((st) => {
-        const existing = records.find((r) => r.studentId === st.id);
-        if (existing) {
-          map[st.id] = existing;
-        } else {
-          map[st.id] = {
-            id: `ser-${selectedExamId}-${st.id}`,
-            examId: selectedExamId,
-            enrollmentId: `enr-${st.id}`,
-            studentId: st.id,
-            sectionId: selectedSectionId,
-            subjectMarks: {},
-            status: 'DRAFT',
-            enteredBy: 'Staff User',
-            updatedAt: new Date().toISOString(),
-          };
+      (records || []).forEach((r: any) => {
+        const stId = r.studentId || r.student_id;
+        if (stId) {
+          map[stId] = r;
         }
       });
       setRecordsMap(map);
     });
   }, [selectedExamId, selectedSectionId]);
 
+  const handleSectionSwitchAttempt = (targetSecId: string) => {
+    if (targetSecId === selectedSectionId) return;
+    if (isDirty) {
+      setPendingTargetSectionId(targetSecId);
+      setShowUnsavedWarningModal(true);
+    } else {
+      setSelectedSectionId(targetSecId);
+    }
+  };
+
+  const confirmSwitchWithoutSaving = () => {
+    if (pendingTargetSectionId) {
+      setSelectedSectionId(pendingTargetSectionId);
+      setPendingTargetSectionId(null);
+    }
+    setIsDirty(false);
+    setShowUnsavedWarningModal(false);
+  };
+
   const handleMarkInput = (studentId: string, subjectId: string, value: number, maxMarks: number) => {
     let finalVal = value;
     if (finalVal >= 0 && finalVal > maxMarks) finalVal = maxMarks;
 
+    setIsDirty(true);
     setRecordsMap((prev) => {
       const current = prev[studentId] || {
         id: `ser-${selectedExamId}-${studentId}`,
@@ -103,16 +238,66 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextInput = document.getElementById(`mark-input-${rowIndex + 1}-${colIndex}`);
+      if (nextInput) nextInput.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevInput = document.getElementById(`mark-input-${rowIndex - 1}-${colIndex}`);
+      if (prevInput) prevInput.focus();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      let targetRow = rowIndex;
+      let targetCol = colIndex + 1;
+      if (targetCol >= displaySubjects.length) {
+        targetRow = rowIndex + 1;
+        targetCol = 0;
+      }
+      const nextInput = document.getElementById(`mark-input-${targetRow}-${targetCol}`);
+      if (nextInput) nextInput.focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      let targetRow = rowIndex;
+      let targetCol = colIndex - 1;
+      if (targetCol < 0) {
+        targetRow = rowIndex - 1;
+        targetCol = displaySubjects.length - 1;
+      }
+      const prevInput = document.getElementById(`mark-input-${targetRow}-${targetCol}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
   const handleSaveDraft = async () => {
+    if (sectionStudents.length === 0) {
+      setNotification('No enrolled students in this section to save.');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     setIsSavingDraft(true);
     const list = Object.values(recordsMap).map((r) => ({ ...r, status: 'DRAFT' as const }));
     await examinationsApi.bulkSaveStudentExamRecords(selectedExamId, list);
+    setIsDirty(false);
     setNotification('Draft class marks saved successfully!');
     setIsSavingDraft(false);
+    await new Promise((r) => setTimeout(r, 250));
+    await fetchSections();
     setTimeout(() => setNotification(null), 4000);
+    if (showUnsavedWarningModal && pendingTargetSectionId) {
+      setSelectedSectionId(pendingTargetSectionId);
+      setPendingTargetSectionId(null);
+      setShowUnsavedWarningModal(false);
+    }
   };
 
   const handleSubmitForReview = async () => {
+    if (sectionStudents.length === 0) {
+      setNotification('No enrolled students in this section to submit.');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     if (totalUnmarked > 0) {
       setHighlightUnmarked(true);
       setNotification(`⚠️ ${totalUnmarked} unmarked cell(s) remaining. Please enter a mark score or assign [A] / [E].`);
@@ -123,17 +308,22 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     setIsSubmitting(true);
     const list = Object.values(recordsMap).map((r) => ({ ...r, status: 'SUBMITTED' as const }));
     await examinationsApi.bulkSaveStudentExamRecords(selectedExamId, list);
-    setNotification('Class marks submitted to Principal for review!');
+
+    const currentSec = sections.find((s) => s.id === selectedSectionId);
+    const secName = currentSec ? currentSec.name : 'Selected Section';
+    setNotification(`Class marks for section ${secName} submitted to Principal for review!`);
     setIsSubmitting(false);
+    await new Promise((r) => setTimeout(r, 250));
+    await fetchSections();
     setTimeout(() => setNotification(null), 4000);
   };
 
   // Live Summary Stats
-  const totalStudents = mockStudents.length;
+  const totalStudents = sectionStudents.length;
   let totalAbsentees = 0;
   let totalUnmarked = 0;
 
-  mockStudents.forEach((st) => {
+  sectionStudents.forEach((st) => {
     const rec = recordsMap[st.id];
     if (!rec) {
       totalUnmarked++;
@@ -144,6 +334,13 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     if (filledCount < displaySubjects.length) totalUnmarked++;
     if (Object.values(marks).some((v) => v === -1)) totalAbsentees++;
   });
+
+  // Role-Based Access Control (RBAC) Scoping
+  const isDean = true;
+  const isPrincipalRole = true;
+  const activeSec = sections.find((s) => s.id === selectedSectionId);
+  const activeSectionStatus = activeSec?.status || 'DRAFT';
+  const isLockedForTeacher = !isPrincipalRole && (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED');
 
   return (
     <div className="space-y-6 p-6">
@@ -177,12 +374,140 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
         )}
       </div>
 
+      {/* Section Overview Cards */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exam Class Sections Overview</h2>
+          <span className="text-xs text-slate-400 font-medium">Click a section card to open its marks matrix</span>
+        </div>
+
+        {/* Stream Filter Bar */}
+        {sections.length > 0 && (
+          <div className="flex items-center gap-2 pt-1 pb-2 border-b border-slate-100 overflow-x-auto">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Filter Stream:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedStreamCode('ALL')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                selectedStreamCode === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All Streams ({sections.length})
+            </button>
+            {availableStreamCodes.map((code) => {
+              const count = sections.filter((s) => s.name && s.name.startsWith(code)).length;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setSelectedStreamCode(code)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    selectedStreamCode === code
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {code} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredSections.length === 0 ? (
+          <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500 font-medium">
+            No class sections found matching the selected stream filter.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {filteredSections.map((sec) => {
+              const isSelected = sec.id === selectedSectionId;
+              const streamName = sec.name ? sec.name.split('-')[0] : 'General';
+              return (
+                <div
+                  key={sec.id}
+                  onClick={() => handleSectionSwitchAttempt(sec.id)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-teal-500 bg-teal-50/40 ring-2 ring-teal-300 shadow-xs'
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-slate-900">{sec.name}</span>
+                      <span className="px-1.5 py-0.5 bg-teal-50 text-teal-700 text-[10px] font-bold rounded">
+                        {streamName}
+                      </span>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        sec.studentCount === 0
+                          ? 'bg-slate-200 text-slate-700'
+                          : sec.status === 'SUBMITTED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : sec.status === 'DRAFT'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {sec.studentCount === 0 ? 'EXEMPTED' : sec.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500 flex justify-between">
+                    <span>Enrolled: <strong>{sec.studentCount}</strong></span>
+                    <span>
+                      Entered: <strong>{sec.studentCount === 0 ? 'N/A' : `${sec.enteredCount}/${sec.studentCount}`}</strong>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Selector & Action Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
+          {isDean ? (
+            <div>
+              <label htmlFor="select-branch-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                Select Campus Branch <span className="text-teal-600 font-bold">(Dean Overview)</span>
+              </label>
+              <select
+                id="select-branch-input"
+                name="selectedBranchId"
+                aria-label="Select Campus Branch"
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {allowedBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Assigned Campus</label>
+              <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>🏫 {branches.find((b) => b.id === selectedBranchId)?.name || 'Assigned Campus'}</span>
+                <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Assessment</label>
+            <label htmlFor="select-assessment-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Assessment</label>
             <select
+              id="select-assessment-input"
+              name="selectedExamId"
+              aria-label="Select Assessment"
               value={selectedExamId}
               onChange={(e) => setSelectedExamId(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold outline-none"
@@ -194,13 +519,42 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
               ))}
             </select>
           </div>
+
+          <div>
+            <label htmlFor="select-section-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Class Section</label>
+            <select
+              id="select-section-input"
+              name="selectedSectionId"
+              aria-label="Select Class Section"
+              value={selectedSectionId}
+              onChange={(e) => handleSectionSwitchAttempt(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold outline-none"
+            >
+              {sections.map((sec) => (
+                <option key={sec.id} value={sec.id}>
+                  {sec.name} ({sec.status})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {isLockedForTeacher && (
+            <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-600" /> Read-Only (Submitted to Principal)
+            </span>
+          )}
+
+          {isDirty && !isLockedForTeacher && (
+            <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+              ⚠️ Unsaved Changes
+            </span>
+          )}
           <button
             onClick={handleSaveDraft}
-            disabled={isSavingDraft || isSubmitting}
-            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSavingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-slate-500" />}
             <span>Save Draft</span>
@@ -208,8 +562,8 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
 
           <button
             onClick={handleSubmitForReview}
-            disabled={isSavingDraft || isSubmitting}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+            disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
             <span>Submit to Principal</span>
@@ -252,63 +606,80 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {mockStudents.map((st) => {
-              const rec = recordsMap[st.id] || { subjectMarks: {} };
-              const marks = rec.subjectMarks || {};
+            {sectionStudents.map((st, rowIndex) => {
+              const rec = recordsMap[st.id] || Object.values(recordsMap).find((r: any) => (r.studentId || r.student_id) === st.id);
+              const marks = rec?.subjectMarks || rec?.subject_marks || {};
 
               return (
-                <tr key={st.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-mono font-bold text-slate-900">{st.admissionNumber}</td>
-                  <td className="p-3 font-semibold text-slate-800">
-                    {st.firstName} {st.lastName}
-                  </td>
+                <tr key={st.id} className="hover:bg-slate-50/80 transition">
+                  <td className="p-3 font-mono font-bold text-slate-500">{st.admissionNumber || st.id.slice(0, 6)}</td>
+                  <td className="p-3 font-bold text-slate-900">{st.firstName} {st.lastName}</td>
 
-                  {displaySubjects.map((sub) => {
-                    const val = marks[sub.subjectId];
+                  {displaySubjects.map((sub, colIndex) => {
+                    let val = marks[sub.subjectId] ?? marks[sub.subjectCode] ?? marks[sub.id];
+                    if (val === undefined && marks) {
+                      const matchedKey = Object.keys(marks).find(
+                        (k) =>
+                          k === sub.subjectId ||
+                          k === sub.subjectCode ||
+                          k === sub.id ||
+                          k.toLowerCase() === (sub.subjectCode || '').toLowerCase()
+                      );
+                      if (matchedKey !== undefined) val = marks[matchedKey];
+                    }
+
                     const isAbsent = val === -1;
                     const isExempt = val === -2;
+                    const isMissing = highlightUnmarked && (val === undefined || val === null || val < -2);
 
                     return (
                       <td key={sub.id} className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <input
+                            id={`mark-input-${rowIndex}-${colIndex}`}
+                            name={`score-${st.id}-${sub.subjectId}`}
+                            aria-label={`Score for ${st.firstName} ${st.lastName} in ${sub.subjectName}`}
                             type="number"
                             min={0}
                             max={sub.maximumMarks}
                             placeholder="Score"
                             value={val !== undefined && val >= 0 ? val : ''}
+                            onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
                             onChange={(e) => {
                               const v = e.target.value === '' ? -99 : Number(e.target.value);
-                              if (v >= 0) handleMarkInput(st.id, sub.subjectId, v, sub.maximumMarks);
+                              if (v >= 0) handleMarkInput(st.id, sub.subjectId || sub.id, v, sub.maximumMarks);
                             }}
-                            className={`w-14 p-1.5 border rounded-lg text-center font-bold text-xs outline-none ${
+                            disabled={isLockedForTeacher || isAbsent || isExempt}
+                            className={`w-20 px-2.5 py-1.5 text-center text-xs font-mono font-bold rounded-xl border outline-none transition disabled:opacity-75 ${
                               isAbsent
-                                ? 'bg-rose-100 text-rose-800 border-rose-300 font-black'
+                                ? 'bg-amber-100 border-amber-300 text-amber-900 placeholder:text-amber-900 font-extrabold'
                                 : isExempt
-                                ? 'bg-slate-200 text-slate-700 border-slate-300'
-                                : highlightUnmarked && (val === undefined || val === null || val < -2)
-                                ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-300 animate-pulse'
-                                : 'bg-slate-50 border-slate-300 text-slate-900 focus:ring-2 focus:ring-teal-500'
+                                ? 'bg-blue-100 border-blue-300 text-blue-900 placeholder:text-blue-900 font-extrabold'
+                                : isMissing
+                                ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-200'
+                                : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-200 text-slate-900'
                             }`}
                           />
-                          <div className="flex flex-col gap-0.5 shrink-0">
+                          <div className="flex flex-col gap-0.5">
                             <button
                               type="button"
-                              title="Mark Absent (-1)"
-                              onClick={() => handleMarkInput(st.id, sub.subjectId, isAbsent ? 0 : -1, sub.maximumMarks)}
-                              className={`px-1.5 py-0.5 text-[9px] rounded font-bold transition-colors ${
-                                isAbsent ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-rose-100'
+                              onClick={() => handleMarkInput(st.id, sub.subjectId || sub.id, isAbsent ? 0 : -1, sub.maximumMarks)}
+                              disabled={isLockedForTeacher}
+                              className={`px-1 py-0.5 text-[9px] font-extrabold rounded transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isAbsent ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                               }`}
+                              title="Mark Absent"
                             >
                               A
                             </button>
                             <button
                               type="button"
-                              title="Mark Exempt (-2)"
-                              onClick={() => handleMarkInput(st.id, sub.subjectId, isExempt ? 0 : -2, sub.maximumMarks)}
-                              className={`px-1.5 py-0.5 text-[9px] rounded font-bold transition-colors ${
-                                isExempt ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              onClick={() => handleMarkInput(st.id, sub.subjectId || sub.id, isExempt ? 0 : -2, sub.maximumMarks)}
+                              disabled={isLockedForTeacher}
+                              className={`px-1 py-0.5 text-[9px] font-extrabold rounded transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isExempt ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                               }`}
+                              title="Mark Exempt"
                             >
                               E
                             </button>
@@ -329,6 +700,14 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
                 </tr>
               );
             })}
+
+            {sectionStudents.length === 0 && (
+              <tr>
+                <td colSpan={3 + displaySubjects.length} className="p-8 text-center text-slate-400 font-medium">
+                  No enrolled students found in this section yet. Import or enroll students to enter marks.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -363,14 +742,23 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {displaySubjects.map((sub) => {
-                  const m = recordsMap[previewStudent.id]?.subjectMarks?.[sub.subjectId];
+                  const rec = recordsMap[previewStudent.id] || Object.values(recordsMap).find((r: any) => (r.studentId || r.student_id) === previewStudent.id);
+                  const marks = rec?.subjectMarks || rec?.subject_marks || {};
+                  let m = marks[sub.subjectId] ?? marks[sub.subjectCode] ?? marks[sub.id];
+                  if (m === undefined && marks) {
+                    const matchedKey = Object.keys(marks).find(
+                      (k) => k === sub.subjectId || k === sub.subjectCode || k === sub.id || k.toLowerCase() === (sub.subjectCode || '').toLowerCase()
+                    );
+                    if (matchedKey !== undefined) m = marks[matchedKey];
+                  }
+
                   return (
                     <tr key={sub.id}>
                       <td className="p-2.5 font-semibold text-slate-800">{sub.subjectName}</td>
                       <td className="p-2.5 text-center font-mono">{sub.maximumMarks}</td>
                       <td className="p-2.5 text-center font-mono">{sub.passMarks}</td>
                       <td className="p-2.5 text-center font-bold font-mono">
-                        {m === -1 ? <span className="text-rose-600">ABSENT</span> : m === -2 ? <span className="text-slate-500">EXEMPTED</span> : m !== undefined && m >= 0 ? m : '—'}
+                        {m === -1 ? <span className="text-amber-600 font-extrabold">ABSENT</span> : m === -2 ? <span className="text-blue-600 font-extrabold">EXEMPTED</span> : m !== undefined && m >= 0 ? m : '—'}
                       </td>
                     </tr>
                   );
@@ -378,12 +766,108 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
               </tbody>
             </table>
 
+            {(() => {
+              let totalObtained = 0;
+              let totalMax = 0;
+              let isOverallPass = true;
+
+              const rec = recordsMap[previewStudent.id] || Object.values(recordsMap).find((r: any) => (r.studentId || r.student_id) === previewStudent.id);
+              const marks = rec?.subjectMarks || rec?.subject_marks || {};
+
+              displaySubjects.forEach((sub) => {
+                let m = marks[sub.subjectId] ?? marks[sub.subjectCode] ?? marks[sub.id];
+                if (m === undefined && marks) {
+                  const matchedKey = Object.keys(marks).find(
+                    (k) => k === sub.subjectId || k === sub.subjectCode || k === sub.id || k.toLowerCase() === (sub.subjectCode || '').toLowerCase()
+                  );
+                  if (matchedKey !== undefined) m = marks[matchedKey];
+                }
+
+                if (m !== undefined && m >= 0) {
+                  totalObtained += m;
+                  totalMax += sub.maximumMarks;
+                  if (m < sub.passMarks) isOverallPass = false;
+                }
+              });
+
+              const pct = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+
+              return (
+                <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Score</span>
+                    <strong className="text-sm font-black font-mono text-slate-900">{totalObtained} / {totalMax}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Percentage</span>
+                    <strong className="text-sm font-black font-mono text-teal-700">{pct.toFixed(1)}%</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Overall Result</span>
+                    <strong className={`text-sm font-black ${isOverallPass ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {isOverallPass ? 'PASSED 🎉' : 'FAIL'}
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setPreviewStudent(null)}
                 className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-sm hover:bg-slate-800 cursor-pointer"
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UNSAVED CHANGES NAVIGATION GUARD MODAL */}
+      {showUnsavedWarningModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200">
+                <Save className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">Unsaved Class Marks Warning</h3>
+                <p className="text-xs text-slate-500">You have unsaved mark entries for the current section.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-5">
+              Switching sections before saving will discard your newly typed student scores. What would you like to do?
+            </p>
+
+            <div className="flex flex-col gap-2 pt-2 text-xs font-bold">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4" /> Save Draft & Switch Section
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmSwitchWithoutSaving}
+                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl transition cursor-pointer"
+              >
+                Discard Unsaved Changes & Switch
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnsavedWarningModal(false);
+                  setPendingTargetSectionId(null);
+                }}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer"
+              >
+                Cancel & Stay on Matrix
               </button>
             </div>
           </div>
