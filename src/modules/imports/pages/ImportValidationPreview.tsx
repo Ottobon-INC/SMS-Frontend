@@ -402,26 +402,37 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                           </span>
                         )}
                       </td>
-                      {previewColumns.map((col) => (
-                        <td key={col} className="px-5 py-3 text-slate-600 align-top">
-                          {isEditing ? (
-                            <input
-                              value={getEditableValue(editedRow[col])}
-                              onChange={(e) => updateEditedCell(col, e.target.value)}
-                              disabled={col === "Student Created" || isSavingRow}
-                              className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50 disabled:text-slate-400 transition-all shadow-sm"
-                            />
-                          ) : (
-                            <span
-                              className={
-                                col === "Student Name" ? "font-bold text-slate-900" : ""
-                              }
-                            >
-                              {getDisplayValue(row.raw_data[col])}
-                            </span>
-                          )}
-                        </td>
-                      ))}
+                      {previewColumns.map((col) => {
+                        const colError = row.errors?.find((err) => err.field === col);
+                        const hasError = !!colError;
+
+                        return (
+                          <td key={col} className={`px-5 py-3 text-slate-600 align-top transition-colors ${hasError && !isEditing ? "bg-red-50/60" : ""}`}>
+                            {isEditing ? (
+                              <input
+                                value={getEditableValue(editedRow[col])}
+                                onChange={(e) => updateEditedCell(col, e.target.value)}
+                                disabled={col === "Student Created" || isSavingRow}
+                                title={colError?.message}
+                                className={`w-48 rounded-md border px-2.5 py-1.5 text-xs outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 transition-all ${
+                                  hasError 
+                                    ? "bg-red-50/80 border-red-300 text-red-900 focus:border-red-500 focus:ring-red-200"
+                                    : "bg-white border-transparent hover:border-slate-300 focus:border-slate-900 focus:ring-slate-200 text-slate-900 shadow-[0_0_0_1px_rgba(0,0,0,0.05)]"
+                                }`}
+                              />
+                            ) : (
+                              <span
+                                title={colError?.message}
+                                className={`inline-block ${
+                                  col === "Student Name" ? "font-bold text-slate-900" : ""
+                                } ${hasError ? "text-red-700 font-medium" : ""}`}
+                              >
+                                {getDisplayValue(row.raw_data[col])}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="px-5 py-3 text-slate-600 min-w-[320px] whitespace-normal">
                         {row.errors && row.errors.length > 0 ? (
                           <ul className="flex flex-col gap-1.5">

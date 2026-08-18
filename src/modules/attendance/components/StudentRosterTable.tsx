@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 import type { AttendanceStudentResponse, AttendanceStatus } from "../types/attendance.types";
 
 interface StudentRosterTableProps {
@@ -16,14 +17,59 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
   editable = false,
   searchQuery,
 }) => {
-  const filteredStudents = students.filter((s) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      s.studentName.toLowerCase().includes(q) ||
-      (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
-      (s.admissionNumber && s.admissionNumber.toLowerCase().includes(q))
-    );
-  });
+  const [parent] = useAutoAnimate<HTMLDivElement>();
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const q = searchQuery.toLowerCase();
+      return (
+        s.studentName.toLowerCase().includes(q) ||
+        (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+        (s.admissionNumber && s.admissionNumber.toLowerCase().includes(q))
+      );
+    });
+  }, [students, searchQuery]);
+
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!editable) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't interfere if focus is in an input
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHighlightedIndex(0);
+          (document.activeElement as HTMLElement).blur();
+        }
+        return;
+      }
+      
+      if (filteredStudents.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev < filteredStudents.length - 1 ? prev + 1 : prev));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      } else if (e.key === "Enter" && highlightedIndex >= 0 && highlightedIndex < filteredStudents.length) {
+        e.preventDefault();
+        const student = filteredStudents[highlightedIndex];
+        const current = localState[student.enrollmentId] || student.attendanceStatus;
+        let next: AttendanceStatus = "PRESENT";
+        if (current === "PRESENT") next = "ABSENT";
+        else if (current === "ABSENT") next = "LEAVE";
+        else if (current === "LEAVE") next = "PRESENT";
+        onMarkStudent(student.enrollmentId, next);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editable, filteredStudents, highlightedIndex, localState, onMarkStudent]);
 
   if (filteredStudents.length === 0) {
     return (
@@ -44,24 +90,28 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
       </div>
 
       {/* Rows */}
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-slate-100" ref={parent}>
         {filteredStudents.map((s, idx) => {
           const currentStatus = localState[s.enrollmentId] || s.attendanceStatus;
-          const rowBg =
-            !editable
-              ? currentStatus === "PRESENT"
-                ? "bg-emerald-50/40"
-                : currentStatus === "ABSENT"
-                ? "bg-red-50/40"
-                : currentStatus === "LEAVE"
-                ? "bg-amber-50/40"
-                : ""
+          const isHighlighted = idx === highlightedIndex;
+          
+          let rowBg = "";
+          if (editable && isHighlighted) {
+            rowBg = "bg-teal-50 ring-2 ring-inset ring-teal-400 z-10 relative shadow-sm";
+          } else if (!editable) {
+            rowBg = currentStatus === "PRESENT"
+              ? "bg-emerald-50/40"
+              : currentStatus === "ABSENT"
+              ? "bg-red-50/40"
+              : currentStatus === "LEAVE"
+              ? "bg-amber-50/40"
               : "";
+          }
 
           return (
             <div
               key={s.enrollmentId}
-              className={`grid grid-cols-[56px_1fr_120px_160px] items-center px-4 py-3.5 transition-colors hover:bg-slate-50/70 ${rowBg}`}
+              className={`grid grid-cols-[56px_1fr_120px_160px] items-center px-4 py-3.5 transition-all duration-200 hover:bg-slate-50/70 ${rowBg}`}
             >
               {/* Roll number */}
               <div className="text-center">
@@ -73,6 +123,9 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
               {/* Name */}
               <div>
                 <p className="font-semibold text-sm text-slate-900">{s.studentName}</p>
+                {editable && isHighlighted && (
+                  <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider mt-0.5">Press Enter to mark</p>
+                )}
               </div>
 
               {/* Admission No */}
@@ -105,6 +158,14 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
                       onClick={() => onMarkStudent(s.enrollmentId, "LEAVE")}
                       activeClass="bg-amber-500 text-white shadow-sm"
                     />
+                    <div className="w-px h-6 bg-slate-200 mx-1"></div>
+                    <MarkButton
+                      label="C"
+                      title="Clear"
+                      active={currentStatus === "UNMARKED" || !currentStatus}
+                      onClick={() => onMarkStudent(s.enrollmentId, "UNMARKED")}
+                      activeClass="bg-slate-300 text-slate-700 shadow-sm"
+                    />
                   </div>
                 ) : (
                   <StatusBadge status={currentStatus} />
@@ -119,7 +180,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
 };
 
 const MarkButton: React.FC<{
-  label: string;
+  label: React.ReactNode;
   title: string;
   active: boolean;
   onClick: () => void;
@@ -129,7 +190,7 @@ const MarkButton: React.FC<{
     type="button"
     title={title}
     onClick={onClick}
-    className={`w-9 h-9 rounded-lg font-bold text-sm transition-all active:scale-95 ${
+    className={`w-9 h-9 rounded-lg font-bold text-sm flex items-center justify-center transition-all active:scale-95 ${
       active ? activeClass : "text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm"
     }`}
   >

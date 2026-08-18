@@ -31,6 +31,7 @@ export function useCreateAttendanceSession() {
     mutationFn: (payload: AttendanceSessionCreate) => attendanceApi.createSession(payload),
     onSuccess: (data: any) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
+      queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
   });
 }
@@ -42,6 +43,7 @@ export function useSaveDraftAttendance() {
       attendanceApi.saveDraft(sessionId, payload),
     onSuccess: (data: any) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
+      queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
   });
 }
@@ -52,6 +54,7 @@ export function useSubmitAttendance() {
     mutationFn: (sessionId: string) => attendanceApi.submitSession(sessionId),
     onSuccess: (data: any) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
+      queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
   });
 }
@@ -62,6 +65,7 @@ export function useFinalizeAttendance() {
     mutationFn: (sessionId: string) => attendanceApi.finalizeSession(sessionId),
     onSuccess: (data: any) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
+      queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
   });
 }

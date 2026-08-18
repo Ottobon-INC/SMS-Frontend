@@ -93,7 +93,7 @@ export interface StudentInlineUpdatePayload {
 }
 
 export const studentsApi = {
-  list: () => apiGet<StudentListItem[]>("/students"),
+  list: (branchId?: string) => apiGet<StudentListItem[]>(`/students${branchId ? `?branch_id=${branchId}` : ''}`),
   create: (payload: unknown) => apiPost<StudentListItem>("/students", payload),
   updateInline: (studentId: string, payload: StudentInlineUpdatePayload) =>
     apiPatch<{ status: string; message: string }>(`/students/${studentId}`, payload)

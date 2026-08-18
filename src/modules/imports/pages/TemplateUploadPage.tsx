@@ -46,6 +46,33 @@ export function TemplateUploadPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+        setError("Only Excel files (.xlsx) are supported. Please use the official template.");
+        setSelectedFile(null);
+        return;
+      }
+      setError(null);
+      setSelectedFile(file);
+      setShowConfirm(false);
+    }
+  };
 
   // Auto-select single branch
   useEffect(() => {
@@ -273,13 +300,22 @@ export function TemplateUploadPage() {
             ) : (
               <label
                 htmlFor="student-file-upload"
-                className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-10 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-all cursor-pointer"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-10 transition-all cursor-pointer ${
+                  isDragging
+                    ? "bg-emerald-50 border-emerald-400 scale-[1.02] shadow-sm"
+                    : "bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                }`}
               >
                 <div className="w-14 h-14 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-3">
-                  <UploadCloud className="w-7 h-7 text-slate-400" />
+                  <UploadCloud className={`w-7 h-7 transition-colors ${isDragging ? "text-emerald-500" : "text-slate-400"}`} />
                 </div>
-                <p className="text-sm font-semibold text-slate-700 mb-1">Click to select your file</p>
-                <p className="text-xs text-slate-400">Excel files only (.xlsx)</p>
+                <p className={`text-sm font-semibold mb-1 ${isDragging ? "text-emerald-700" : "text-slate-700"}`}>
+                  {isDragging ? "Drop your file here!" : "Click or drag to select your file"}
+                </p>
+                <p className={`text-xs ${isDragging ? "text-emerald-600/70" : "text-slate-400"}`}>Excel files only (.xlsx)</p>
               </label>
             )}
           </div>

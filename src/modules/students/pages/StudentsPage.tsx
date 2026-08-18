@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, AlertCircle, Edit3, Save } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, AlertCircle, Edit3, Save, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
+import { useQueryClient } from '@tanstack/react-query';
+import { useStudents, STUDENT_KEYS } from '../hooks/useStudents';
 import { studentsApi, type StudentInlineUpdatePayload, type StudentListItem } from '../api/studentsApi';
+import { useAttendanceBranches } from '../../attendance/hooks/useAttendance';
 
 type StudentColumn = {
   key: string;
@@ -26,6 +29,7 @@ function formatCellValue(value: unknown): string {
 const studentColumns: StudentColumn[] = [
   { key: 'admissionNumber', label: 'Admission No', value: (s) => s.admissionNumber, className: 'font-mono text-teal-700 font-bold' },
   { key: 'studentName', label: 'Student Name', value: (s) => s.displayName ?? s.legalName ?? s.name, className: 'font-bold text-slate-900', updateKey: 'student_name' },
+  { key: 'branchName', label: 'Branch', value: (s) => s.branchName ?? 'N/A' },
   { key: 'gender', label: 'Gender', value: (s) => s.gender, updateKey: 'gender', inputType: 'select', options: ['MALE', 'FEMALE', 'OTHER'] },
   { key: 'dateOfBirth', label: 'Date Of Birth', value: (s) => s.dateOfBirth ?? s.dob, updateKey: 'date_of_birth', inputType: 'date' },
   { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
@@ -43,17 +47,108 @@ const studentColumns: StudentColumn[] = [
   { key: 'studentCreatedAt', label: 'Student Created', value: (s) => s.studentCreatedAt },
 ];
 
+const SearchableBranchSelect = ({ 
+  branches, 
+  value, 
+  onChange 
+}: { 
+  branches: { id: string, name: string }[], 
+  value: string, 
+  onChange: (val: string) => void 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedBranch = branches.find(b => b.id === value);
+  const filteredBranches = branches.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-3 py-2 min-w-[200px] bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-teal-500 flex justify-between items-center gap-2 transition"
+      >
+        <span className="truncate">{selectedBranch ? selectedBranch.name : 'Select Branch...'}</span>
+        <ChevronDown className="w-4 h-4 text-slate-400" />
+      </button>
+      
+      {isOpen && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-[280px] bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-slate-100">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Search branches..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-teal-500"
+              />
+            </div>
+          </div>
+          <div className="max-h-[240px] overflow-y-auto p-1">
+            {filteredBranches.length > 0 ? filteredBranches.map(b => (
+              <button
+                key={b.id}
+                onClick={() => { onChange(b.id); setIsOpen(false); setSearch(''); }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition ${b.id === value ? 'bg-teal-50 text-teal-700' : 'hover:bg-slate-50 text-slate-700'}`}
+              >
+                {b.name}
+              </button>
+            )) : (
+              <div className="px-3 py-4 text-center text-xs text-slate-500">No branches found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const StudentsPage: React.FC = () => {
   const auth = useAuth();
-  const [students, setStudents] = useState<StudentListItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const isTenantLevel = !auth.activeContext?.branch_id;
+  const { data: branches = [] } = useAttendanceBranches();
+  
+  const [branchFilter, setBranchFilter] = useState<string>(isTenantLevel ? 'PENDING' : 'ALL');
+
+  // Set default branch for Tenant Level users once branches load
+  useEffect(() => {
+    if (isTenantLevel && branchFilter === 'PENDING' && branches.length > 0) {
+      setBranchFilter(branches[0].id);
+    }
+  }, [isTenantLevel, branchFilter, branches]);
+
+  const fetchBranchId = isTenantLevel ? (branchFilter === 'PENDING' ? undefined : branchFilter) : undefined;
+  const shouldFetch = !isTenantLevel || branchFilter !== 'PENDING';
+  
+  const { data: students = [], isLoading: loading, error: queryError, refetch } = useStudents(fetchBranchId, shouldFetch);
+  
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [streamFilter, setStreamFilter] = useState<string>('ALL');
+  const [yearFilter, setYearFilter] = useState<string>('ALL');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<boolean>(false);
   const [savingEdits, setSavingEdits] = useState<boolean>(false);
   const [draftChanges, setDraftChanges] = useState<Record<string, StudentInlineUpdatePayload>>({});
+  
+  // Pagination
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // 3-Tab Modal State
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -79,25 +174,6 @@ export const StudentsPage: React.FC = () => {
 
   const [notification, setNotification] = useState<string | null>(null);
   const canEditStudents = auth.hasAnyPermission(['student.update_basic', 'student.update_sensitive']);
-
-  const fetchStudents = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const data = await studentsApi.list();
-      setStudents(data);
-    } catch (err: unknown) {
-      console.error('Failed to fetch students:', err);
-      setLoadError(err instanceof Error ? err.message : 'Failed to load students.');
-      setStudents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStudents();
-  }, []);
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +202,7 @@ export const StudentsPage: React.FC = () => {
           guardian_email: guardianEmail,
         },
       });
-      setStudents((prev) => [newStu, ...prev]);
+      queryClient.invalidateQueries({ queryKey: STUDENT_KEYS.lists() });
       setShowAddModal(false);
       resetForm();
       setNotification(`Student "${newStu.name}" enrolled successfully!`);
@@ -195,7 +271,7 @@ export const StudentsPage: React.FC = () => {
       for (const [studentId, changes] of changedEntries) {
         await studentsApi.updateInline(studentId, changes);
       }
-      await fetchStudents();
+      queryClient.invalidateQueries({ queryKey: STUDENT_KEYS.lists() });
       setDraftChanges({});
       setEditMode(false);
       setNotification('Student changes saved successfully.');
@@ -218,8 +294,46 @@ export const StudentsPage: React.FC = () => {
       s.stream === streamFilter ||
       s.programmeCode === streamFilter ||
       s.streamCode === streamFilter;
-    return matchesSearch && matchesStream;
+    const matchesBranch =
+      branchFilter === 'ALL' ||
+      branchFilter === 'PENDING' ||
+      s.branchId === branchFilter || // use API branch ID if available
+      s.branchName === branchFilter ||
+      s.branchCode === branchFilter;
+      
+    const matchesYear =
+      yearFilter === 'ALL' ||
+      (yearFilter === '1' && (
+        s.batchName?.toLowerCase().includes('1st') || 
+        s.batchName?.toLowerCase().includes('jr') ||
+        s.batchName?.toLowerCase().includes('first') ||
+        s.section?.toLowerCase().includes('jr') ||
+        s.section?.toLowerCase().includes('1st') ||
+        s.sectionName?.toLowerCase().includes('jr') ||
+        s.sectionName?.toLowerCase().includes('1st')
+      )) ||
+      (yearFilter === '2' && (
+        s.batchName?.toLowerCase().includes('2nd') || 
+        s.batchName?.toLowerCase().includes('sr') ||
+        s.batchName?.toLowerCase().includes('second') ||
+        s.section?.toLowerCase().includes('sr') ||
+        s.section?.toLowerCase().includes('2nd') ||
+        s.sectionName?.toLowerCase().includes('sr') ||
+        s.sectionName?.toLowerCase().includes('2nd')
+      ));
+
+    return matchesSearch && matchesStream && matchesBranch && matchesYear;
   });
+
+  // Reset pagination if filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, streamFilter, branchFilter, yearFilter]);
+
+  const totalPages = Math.ceil(filteredStudents.length / PAGE_SIZE);
+  const paginatedStudents = filteredStudents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Force branch selection for Dean (no "All Branches") - handled at top level
 
   return (
     <div className="space-y-6 p-6">
@@ -248,7 +362,7 @@ export const StudentsPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={fetchStudents}
+            onClick={() => refetch()}
             className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
             title="Refresh Directory"
           >
@@ -306,19 +420,49 @@ export const StudentsPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-bold text-slate-600 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5 text-slate-400" /> Stream:
-          </span>
-          <select
-            value={streamFilter}
-            onChange={(e) => setStreamFilter(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none"
-          >
-            <option value="ALL">All Streams</option>
-            <option value="MPC">MPC Stream</option>
-            <option value="BiPC">BiPC Stream</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-4 text-xs">
+          {isTenantLevel && branches.length > 0 && (
+            <div className="flex items-center gap-1 z-50">
+              <span className="font-bold text-slate-600 flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5 text-slate-400" /> Branch:
+              </span>
+              <SearchableBranchSelect 
+                branches={branches}
+                value={branchFilter}
+                onChange={setBranchFilter}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-1">
+            <span className="font-bold text-slate-600 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-slate-400" /> Stream:
+            </span>
+            <select
+              value={streamFilter}
+              onChange={(e) => setStreamFilter(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-teal-500"
+            >
+              <option value="ALL">All Streams</option>
+              <option value="MPC">MPC Stream</option>
+              <option value="BiPC">BiPC Stream</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="font-bold text-slate-600 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-slate-400" /> Year:
+            </span>
+            <select
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-teal-500"
+            >
+              <option value="ALL">All Years</option>
+              <option value="1">1st Year (Jr)</option>
+              <option value="2">2nd Year (Sr)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -353,7 +497,7 @@ export const StudentsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredStudents.map((s) => (
+              {paginatedStudents.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/80 transition">
                   {studentColumns.map((column) => (
                     <td
@@ -392,6 +536,33 @@ export const StudentsPage: React.FC = () => {
             </tbody>
           </table>
           </div>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-200">
+              <span className="text-xs font-semibold text-slate-500">
+                Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, filteredStudents.length)} of {filteredStudents.length} students
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center px-3 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

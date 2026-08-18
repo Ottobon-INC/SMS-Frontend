@@ -43,11 +43,24 @@ export const AttendanceSessionPage: React.FC = () => {
     if (session) {
       const initial: Record<string, AttendanceStatus> = {};
       session.students.forEach((s) => {
-        initial[s.enrollmentId] = s.attendanceStatus;
+        initial[s.enrollmentId] = s.attendanceStatus === "UNMARKED" && session.status === "DRAFT" ? "PRESENT" : s.attendanceStatus;
       });
       setLocalState(initial);
     }
   }, [session]);
+
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeydown);
+    return () => window.removeEventListener("keydown", handleGlobalKeydown);
+  }, []);
 
   const handleMarkStudent = (enrollmentId: string, status: AttendanceStatus) => {
     if (session?.status !== "DRAFT") return;
@@ -289,8 +302,9 @@ export const AttendanceSessionPage: React.FC = () => {
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search student by name or roll number…"
+              placeholder="Search student by name or roll number… (Cmd+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none shadow-sm"
