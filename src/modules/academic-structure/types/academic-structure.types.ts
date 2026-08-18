@@ -31,3 +31,21 @@ export interface ProgrammePayload {
   yearLevel: string;
   subjectIds: string[];
 }
+
+export interface AcademicYear {
+  id: string;
+  code: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  status: string;
+  isDefault: boolean;
+}
+
+export interface AcademicYearPayload {
+  name: string;
+  code: string;
+  startsOn: string;
+  endsOn: string;
+  isDefault: boolean;
+}

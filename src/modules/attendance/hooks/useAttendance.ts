@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { attendanceApi } from "../api/attendanceApi";
-import type { AttendanceSessionCreate, AttendanceDraftSavePayload } from "../types/attendance.types";
+import type {
+  AttendanceSessionCreate,
+  AttendanceDraftSavePayload,
+  AttendanceSessionResponse,
+} from "../types/attendance.types";
 
 export const ATTENDANCE_KEYS = {
   all: ["attendance"] as const,
@@ -29,7 +33,7 @@ export function useCreateAttendanceSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: AttendanceSessionCreate) => attendanceApi.createSession(payload),
-    onSuccess: (data: any) => {
+    onSuccess: (data: AttendanceSessionResponse) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
@@ -41,7 +45,7 @@ export function useSaveDraftAttendance() {
   return useMutation({
     mutationFn: ({ sessionId, payload }: { sessionId: string; payload: AttendanceDraftSavePayload }) =>
       attendanceApi.saveDraft(sessionId, payload),
-    onSuccess: (data: any) => {
+    onSuccess: (data: AttendanceSessionResponse) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
@@ -52,7 +56,7 @@ export function useSubmitAttendance() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) => attendanceApi.submitSession(sessionId),
-    onSuccess: (data: any) => {
+    onSuccess: (data: AttendanceSessionResponse) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
@@ -63,7 +67,7 @@ export function useFinalizeAttendance() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) => attendanceApi.finalizeSession(sessionId),
-    onSuccess: (data: any) => {
+    onSuccess: (data: AttendanceSessionResponse) => {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },

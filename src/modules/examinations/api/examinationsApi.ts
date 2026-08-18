@@ -46,6 +46,25 @@ type ApiExam = {
   exam_subjects?: ApiExamSubject[];
 };
 
+type ApiStudentExamRecord = {
+  id: string;
+  exam_id?: string;
+  examId?: string;
+  enrollment_id?: string;
+  enrollmentId?: string;
+  student_id?: string;
+  studentId?: string;
+  section_id?: string;
+  sectionId?: string;
+  subject_marks?: Record<string, number>;
+  subjectMarks?: Record<string, number>;
+  status?: StudentExamRecord['status'];
+  entered_by?: string;
+  enteredBy?: string;
+  updated_at?: string;
+  updatedAt?: string;
+};
+
 function mapExamSubjectFromApi(subject: ApiExamSubject): ExamSubject {
   return {
     id: subject.id ?? `${subject.exam_id ?? 'exam'}-${subject.subject_id}`,
@@ -55,6 +74,20 @@ function mapExamSubjectFromApi(subject: ApiExamSubject): ExamSubject {
     subjectCode: subject.subject_code,
     maximumMarks: subject.maximum_marks,
     passMarks: subject.pass_marks,
+  };
+}
+
+function mapStudentExamRecordFromApi(r: ApiStudentExamRecord): StudentExamRecord {
+  return {
+    id: r.id,
+    examId: r.exam_id || r.examId || '',
+    enrollmentId: r.enrollment_id || r.enrollmentId || '',
+    studentId: r.student_id || r.studentId || '',
+    sectionId: r.section_id || r.sectionId || '',
+    subjectMarks: r.subject_marks || r.subjectMarks || {},
+    status: r.status || 'DRAFT',
+    enteredBy: r.entered_by || r.enteredBy || 'Staff User',
+    updatedAt: r.updated_at || r.updatedAt || new Date().toISOString(),
   };
 }
 
@@ -221,7 +254,8 @@ export const examinationsApi = {
       if (sectionId) params.append('section_id', sectionId);
       const res = await fetch(`${API_BASE_URL}/${examId}/records?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch exam records');
-      return await res.json();
+      const data = await res.json();
+      return (data || []).map(mapStudentExamRecordFromApi);
     } catch {
       const local = localStorage.getItem(`sms_records_${examId}_${sectionId}`);
       return local ? JSON.parse(local) : [];
@@ -230,13 +264,26 @@ export const examinationsApi = {
 
   async bulkSaveStudentExamRecords(examId: string, records: Partial<StudentExamRecord>[]): Promise<StudentExamRecord[]> {
     try {
+      const apiPayload = records.map((r) => ({
+        enrollment_id: r.enrollmentId,
+        student_id: r.studentId,
+        section_id: r.sectionId,
+        subject_marks: r.subjectMarks || {},
+        status: r.status || 'DRAFT',
+      }));
+
       const res = await fetch(`${API_BASE_URL}/${examId}/records/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records }),
+        body: JSON.stringify({ records: apiPayload }),
       });
-      if (!res.ok) throw new Error('Failed to bulk save records');
-      return await res.json();
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`Bulk save failed (${res.status}):`, errText);
+        throw new Error(`Failed to bulk save records: ${res.status} - ${errText}`);
+      }
+      const data = await res.json();
+      return (data || []).map(mapStudentExamRecordFromApi);
     } catch (err) {
       console.warn('Bulk save fallback:', err);
       const sectionId = records[0]?.sectionId;
@@ -244,6 +291,17 @@ export const examinationsApi = {
       return records as StudentExamRecord[];
     }
   },
+  async getExamSubjects(examId: string): Promise<ExamSubject[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/${examId}/subjects`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.map(mapExamSubjectFromApi);
+    } catch {
+      return [];
+    }
+  },
+
   async getAcademicYears(): Promise<AcademicYear[]> {
     const res = await fetch('/api/v1/academic-structure/academic-years');
     if (!res.ok) throw new Error('Failed to fetch academic years');
@@ -255,11 +313,7 @@ export const examinationsApi = {
       if (!res.ok) throw new Error('Failed to fetch branches');
       return await res.json();
     } catch {
-      return [
-        { id: '11111111-1111-1111-1111-111111111111', name: 'Hyderabad Main Campus', code: 'HYD-MAIN' },
-        { id: '22222222-2222-2222-2222-222222222222', name: 'Vijayawada City Campus', code: 'VJY-CITY' },
-        { id: '33333333-3333-3333-3333-333333333333', name: 'Visakhapatnam Campus', code: 'VIZAG' },
-      ];
+      return [];
     }
   },
 
@@ -269,13 +323,7 @@ export const examinationsApi = {
       if (!res.ok) throw new Error('Failed to fetch subjects');
       return await res.json();
     } catch {
-      return [
-        { id: '77777777-7777-7777-7777-777777777771', code: 'ENG-101', name: 'English 1', maxMarks: 100, passMarks: 35 },
-        { id: '77777777-7777-7777-7777-777777777772', code: 'SAN-101', name: 'Sanskrit 1', maxMarks: 100, passMarks: 35 },
-        { id: '77777777-7777-7777-7777-777777777773', code: 'MATH-1A', name: 'Mathematics 1A', maxMarks: 75, passMarks: 26 },
-        { id: '77777777-7777-7777-7777-777777777774', code: 'PHY-101', name: 'Physics 1', maxMarks: 60, passMarks: 21 },
-        { id: '77777777-7777-7777-7777-777777777775', code: 'CHEM-101', name: 'Chemistry 1', maxMarks: 60, passMarks: 21 },
-      ];
+      return [];
     }
   },
 
@@ -285,10 +333,7 @@ export const examinationsApi = {
       if (!res.ok) throw new Error('Failed to fetch programmes');
       return await res.json();
     } catch {
-      return [
-        { id: '55555555-5555-5555-5555-555555555555', code: 'MPC', name: 'Maths, Physics, Chemistry', yearLevel: 'First Year', subjectIds: ['77777777-7777-7777-7777-777777777771', '77777777-7777-7777-7777-777777777772', '77777777-7777-7777-7777-777777777773', '77777777-7777-7777-7777-777777777774', '77777777-7777-7777-7777-777777777775'] },
-        { id: '66666666-6666-6666-6666-666666666666', code: 'BiPC', name: 'Biology, Physics, Chemistry', yearLevel: 'First Year', subjectIds: ['77777777-7777-7777-7777-777777777771', '77777777-7777-7777-7777-777777777772', '77777777-7777-7777-7777-777777777774', '77777777-7777-7777-7777-777777777775'] },
-      ];
+      return [];
     }
   },
 };
