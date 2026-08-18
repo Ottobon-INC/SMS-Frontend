@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAttendanceSessions } from "../hooks/useAttendance";
-import { AlertCircle, Loader2, Calendar, ArrowRight, CheckCircle2, Clock, FileCheck } from "lucide-react";
+import { AlertCircle, Loader2, ArrowRight, CheckCircle2, Clock, FileCheck } from "lucide-react";
 
 const statusConfig = {
   SUBMITTED: {

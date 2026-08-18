@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiPut } from "../../../api/client/apiClient";
+import { apiGet, apiPost, apiPut } from "../../../api/client/apiClient";
 import type {
   AttendanceSessionCreate,
   AttendanceSessionResponse,
@@ -17,29 +17,29 @@ export const attendanceApi = {
 
   createSession: (payload: AttendanceSessionCreate) =>
     apiPost<AttendanceSessionResponse>("/attendance/sessions", payload),
-  
+
   getSession: (sessionId: string) =>
     apiGet<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}`),
-  
+
   saveDraft: (sessionId: string, payload: AttendanceDraftSavePayload) =>
     apiPut<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/records`, payload),
-  
+
   submitSession: (sessionId: string) =>
     apiPost<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/submit`, {}),
-  
+
   finalizeSession: (sessionId: string) =>
     apiPost<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/finalize`, {}),
 
   // --- Academic Lookups (proxying existing backend endpoints) ---
   getBranches: () =>
     apiGet<LookupItem[]>("/imports/students/lookups/branches"),
-  
+
   getAcademicYears: () =>
     apiGet<LookupItem[]>("/imports/students/lookups/academic-years"),
-  
+
   getProgrammes: () =>
     apiGet<ProgrammeLookup[]>("/academic-structure/programmes"),
-  
+
   getBatches: (branchId?: string, academicYearId?: string, programmeId?: string) => {
     const params = new URLSearchParams();
     if (branchId) params.append("branch_id", branchId);
@@ -48,7 +48,7 @@ export const attendanceApi = {
     const qs = params.toString();
     return apiGet<LookupItem[]>(`/imports/students/lookups/batches${qs ? `?${qs}` : ""}`);
   },
-  
+
   getSections: (batchId: string) =>
     apiGet<LookupItem[]>(`/imports/students/lookups/sections?batch_id=${batchId}`),
 };

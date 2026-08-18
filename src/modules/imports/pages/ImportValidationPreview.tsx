@@ -7,7 +7,6 @@ import {
   Loader2,
   Pencil,
   Save,
-  ArrowRight,
   X,
   FileCheck,
 } from "lucide-react";
@@ -85,7 +84,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
-  
+
   // Row Editing
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editedRow, setEditedRow] = useState<Record<string, unknown>>({});
