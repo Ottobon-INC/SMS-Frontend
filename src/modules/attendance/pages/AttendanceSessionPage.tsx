@@ -6,6 +6,7 @@ import {
   useSaveDraftAttendance,
   useSubmitAttendance,
   useFinalizeAttendance,
+  useReturnAttendanceSession,
 } from "../hooks/useAttendance";
 import { StudentRosterTable } from "../components/StudentRosterTable";
 import type { AttendanceStatus, SessionStatus } from "../types/attendance.types";
@@ -20,6 +21,7 @@ import {
   Search,
   Users,
   CheckCheck,
+  Undo2,
 } from "lucide-react";
 
 export const AttendanceSessionPage: React.FC = () => {
@@ -31,6 +33,7 @@ export const AttendanceSessionPage: React.FC = () => {
   const saveDraftMutation = useSaveDraftAttendance();
   const submitMutation = useSubmitAttendance();
   const finalizeMutation = useFinalizeAttendance();
+  const returnMutation = useReturnAttendanceSession();
 
   const [localState, setLocalState] = useState<Record<string, AttendanceStatus>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,6 +41,8 @@ export const AttendanceSessionPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
+  const [confirmReturn, setConfirmReturn] = useState(false);
+  const [returnReason, setReturnReason] = useState("");
 
   useEffect(() => {
     if (session) {
@@ -404,14 +409,24 @@ export const AttendanceSessionPage: React.FC = () => {
             )}
 
             {isSubmitted && canFinalize && (
-              <button
-                onClick={() => setConfirmFinalize(true)}
-                disabled={finalizeMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-md"
-              >
-                {finalizeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                Finalize
-              </button>
+              <>
+                <button
+                  onClick={() => setConfirmReturn(true)}
+                  disabled={returnMutation.isPending}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 shadow-sm"
+                >
+                  {returnMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                  Return for Revision
+                </button>
+                <button
+                  onClick={() => setConfirmFinalize(true)}
+                  disabled={finalizeMutation.isPending}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-md"
+                >
+                  {finalizeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                  Finalize
+                </button>
+              </>
             )}
 
             {isFinalized && (
@@ -447,6 +462,44 @@ export const AttendanceSessionPage: React.FC = () => {
           onCancel={() => setConfirmFinalize(false)}
         />
       )}
+
+      {/* Return Confirmation Modal */}
+      {confirmReturn && (
+        <ConfirmModal
+          title="Return Attendance for Revision?"
+          description="Office Staff will be able to edit this attendance and submit it again."
+          confirmLabel="Return to Staff"
+          confirmClass="bg-red-600 hover:bg-red-700 text-white"
+          onConfirm={() => {
+            setConfirmReturn(false);
+            returnMutation.mutate({ sessionId: session.id, reason: returnReason || undefined }, {
+              onSuccess: () => {
+                setSuccessMsg("Session returned to Draft status.");
+                setReturnReason("");
+                refetch();
+              },
+              onError: (err: unknown) => handleApiError(err, "Failed to return session"),
+            });
+          }}
+          onCancel={() => {
+            setConfirmReturn(false);
+            setReturnReason("");
+          }}
+        >
+          <div className="mt-4 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Revision Reason (Optional)
+            </label>
+            <textarea
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 text-sm"
+              rows={3}
+              placeholder="E.g. Please verify attendance for Roll No. 18"
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+            />
+          </div>
+        </ConfirmModal>
+      )}
     </div>
   );
 };
@@ -474,11 +527,13 @@ const ConfirmModal: React.FC<{
   confirmClass: string;
   onConfirm: () => void;
   onCancel: () => void;
-}> = ({ title, description, confirmLabel, confirmClass, onConfirm, onCancel }) => (
+  children?: React.ReactNode;
+}> = ({ title, description, confirmLabel, confirmClass, onConfirm, onCancel, children }) => (
   <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
       <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-      <p className="text-slate-500 text-sm mb-6">{description}</p>
+      <p className="text-slate-500 text-sm mb-4">{description}</p>
+      {children}
       <div className="flex gap-3">
         <button
           onClick={onCancel}

@@ -1,62 +1,61 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAttendanceSessions } from "../hooks/useAttendance";
-import { AlertCircle, Loader2, CheckCircle2, Clock, FileCheck, ArrowRight } from "lucide-react";
+import { AlertCircle, Loader2, CheckCircle2, Clock, FileCheck, ArrowRight, History } from "lucide-react";
 
 const statusConfig = {
   SUBMITTED: {
     label: "Awaiting Review",
     badge: "bg-amber-100 text-amber-700 border-amber-200",
-    dot: "bg-amber-500",
     icon: <Clock className="w-3.5 h-3.5" />,
   },
   FINALIZED: {
     label: "Finalized",
     badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    dot: "bg-emerald-500",
     icon: <CheckCircle2 className="w-3.5 h-3.5" />,
   },
   DRAFT: {
     label: "Draft",
     badge: "bg-slate-100 text-slate-600 border-slate-200",
-    dot: "bg-slate-400",
     icon: <FileCheck className="w-3.5 h-3.5" />,
   },
 };
 
-export const PrincipalInbox: React.FC = () => {
+export const OfficeStaffRecentSessions: React.FC = () => {
   const navigate = useNavigate();
-  // Fetch all sessions the Principal has access to, then filter locally
-  const { data: allSessions, isLoading, error } = useAttendanceSessions();
+  const { data: sessions, isLoading, error } = useAttendanceSessions();
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-600 mb-4" />
-        <p className="text-sm font-medium">Loading inbox…</p>
+      <div className="flex flex-col items-center justify-center p-12 text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-sm mt-8">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-600 mb-4" />
+        <p className="text-sm font-medium">Loading recent sessions…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 text-red-700 border border-red-200 p-6 rounded-2xl flex items-start gap-4">
+      <div className="bg-red-50 text-red-700 border border-red-200 p-6 rounded-2xl flex items-start gap-4 mt-8">
         <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
         <div>
-          <p className="font-semibold">Failed to load inbox</p>
+          <p className="font-semibold">Failed to load recent sessions</p>
           <p className="text-sm mt-1 opacity-80">{(error as Error).message}</p>
         </div>
       </div>
     );
   }
 
-  const sessions = allSessions || [];
-  const pendingSessions = sessions.filter((s) => s.status === "SUBMITTED");
+  const recentSessions = sessions || [];
 
-  // Helper function to render a session card
-  const renderSessionCard = (session: any, isFinalized: boolean = false) => {
+  if (recentSessions.length === 0) {
+    return null;
+  }
+
+  const renderSessionCard = (session: any) => {
     const cfg = statusConfig[session.status as keyof typeof statusConfig] ?? statusConfig.DRAFT;
     const dateObj = new Date(session.attendanceDate + "T00:00:00");
+    const isFinalized = session.status === "FINALIZED";
     
     return (
       <div
@@ -66,7 +65,7 @@ export const PrincipalInbox: React.FC = () => {
         <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Date Block */}
-            <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center text-white shadow-sm flex-shrink-0 ${isFinalized ? "bg-slate-300 text-slate-700" : "bg-gradient-to-br from-violet-500 to-indigo-600 text-white"}`}>
+            <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center text-white shadow-sm flex-shrink-0 ${isFinalized ? "bg-slate-300 text-slate-700" : "bg-gradient-to-br from-teal-500 to-emerald-600 text-white"}`}>
               <span className={`text-[10px] font-bold uppercase tracking-wider ${isFinalized ? "opacity-100 text-slate-500" : "opacity-80"}`}>
                 {dateObj.toLocaleDateString("en-IN", { month: "short" })}
               </span>
@@ -93,15 +92,6 @@ export const PrincipalInbox: React.FC = () => {
                   {dateObj.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
                 </span>
               </div>
-              
-              {/* Optional metrics if finalized */}
-              {session.submittedAt && (
-                <div className="flex items-center gap-3 mt-2 text-xs font-medium text-slate-500">
-                  <span className="text-slate-600">
-                    Submitted: {new Date(session.submittedAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -113,7 +103,7 @@ export const PrincipalInbox: React.FC = () => {
                 : "bg-slate-900 text-white hover:bg-slate-800"
             }`}
           >
-            {isFinalized ? "View Record" : "Review Attendance"}
+            {isFinalized ? "View Record" : session.status === "DRAFT" ? "Resume Draft" : "View Session"}
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
@@ -122,36 +112,15 @@ export const PrincipalInbox: React.FC = () => {
   };
 
   return (
-    <div className="space-y-10">
-      
-      {/* 1. Pending Review Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Pending Review</h2>
-          {pendingSessions.length > 0 && (
-            <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
-              {pendingSessions.length} session{pendingSessions.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
+    <section className="space-y-4 mt-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+        <History className="w-5 h-5 text-slate-400" />
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Recent Sessions History</h2>
+      </div>
 
-        {pendingSessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 text-center shadow-sm">
-            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">You're all caught up!</h3>
-            <p className="text-slate-500 text-sm max-w-sm">
-              No attendance sessions are currently waiting for your review.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingSessions.map(session => renderSessionCard(session, false))}
-          </div>
-        )}
-      </section>
-
-    </div>
+      <div className="space-y-3">
+        {recentSessions.map(session => renderSessionCard(session))}
+      </div>
+    </section>
   );
 };

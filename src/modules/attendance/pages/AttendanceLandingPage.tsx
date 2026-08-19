@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AttendanceContextSelector } from "../components/AttendanceContextSelector";
 import { PrincipalInbox } from "../components/PrincipalInbox";
 import { DeanOverview } from "../components/DeanOverview";
+import { OfficeStaffRecentSessions } from "../components/OfficeStaffRecentSessions";
 import { useCreateAttendanceSession } from "../hooks/useAttendance";
 import { AlertCircle, ClipboardCheck, ShieldCheck, Building2 } from "lucide-react";
 import { useAuth } from "../../authentication/providers/AuthProvider";
@@ -106,22 +107,25 @@ export const AttendanceLandingPage: React.FC = () => {
         ) : isInstitutionAdmin ? (
           <DeanOverview />
         ) : (
-          <AttendanceContextSelector
-            selectedBranch={selectedBranch}
-            setSelectedBranch={setSelectedBranch}
-            selectedAcademicYear={selectedAcademicYear}
-            setSelectedAcademicYear={setSelectedAcademicYear}
-            selectedProgramme={selectedProgramme}
-            setSelectedProgramme={setSelectedProgramme}
-            selectedBatch={selectedBatch}
-            setSelectedBatch={setSelectedBatch}
-            selectedSection={selectedSection}
-            setSelectedSection={setSelectedSection}
-            attendanceDate={attendanceDate}
-            setAttendanceDate={setAttendanceDate}
-            onLoadAttendance={handleLoadAttendance}
-            isCreatingOrLoading={createSessionMutation.isPending}
-          />
+          <div className="flex flex-col gap-4">
+            <AttendanceContextSelector
+              selectedBranch={selectedBranch}
+              setSelectedBranch={setSelectedBranch}
+              selectedAcademicYear={selectedAcademicYear}
+              setSelectedAcademicYear={setSelectedAcademicYear}
+              selectedProgramme={selectedProgramme}
+              setSelectedProgramme={setSelectedProgramme}
+              selectedBatch={selectedBatch}
+              setSelectedBatch={setSelectedBatch}
+              selectedSection={selectedSection}
+              setSelectedSection={setSelectedSection}
+              attendanceDate={attendanceDate}
+              setAttendanceDate={setAttendanceDate}
+              onLoadAttendance={handleLoadAttendance}
+              isCreatingOrLoading={createSessionMutation.isPending}
+            />
+            <OfficeStaffRecentSessions />
+          </div>
         )}
 
         {error && (

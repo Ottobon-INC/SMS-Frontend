@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import {
   AlertTriangle,
   FileSpreadsheet,
@@ -8,35 +8,36 @@ import {
   Loader2,
   RefreshCw,
   LayoutDashboard,
+  ChevronRight,
   CalendarCheck
 } from "lucide-react";
-import { dashboardApi } from "../api/dashboardApi";
-import type { OfficeStaffDashboardResponse } from "../types/dashboard.types";
-import { useAuth } from "../../authentication/providers/AuthProvider";
+import { dashboardApi } from "../../dashboard/api/dashboardApi";
+import type { OfficeStaffDashboardResponse } from "../../dashboard/types/dashboard.types";
 import {
   SummaryCard,
   InfoRow,
   RecentList,
   formatCurrency,
-  formatDate
-} from "../components/DashboardWidgets";
-import { PrincipalInbox } from "../../attendance/components/PrincipalInbox";
+  formatDate,
+} from "../../dashboard/components/DashboardWidgets";
 
-export function BranchDashboardShellPage() {
-  const auth = useAuth();
-  const [dashboard, setDashboard] = useState<OfficeStaffDashboardResponse | null>(null);
+export function DeanBranchViewPage() {
+  const { branchId } = useParams<{ branchId: string }>();
+  const [dashboard, setDashboard] =
+    useState<OfficeStaffDashboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadDashboard = async () => {
+    if (!branchId) return;
     setIsLoading(true);
     setError(null);
     try {
-      // The Principal operates at the branch level, so we reuse the office staff API
-      // which returns exactly the branch-scoped operational data we need to review.
-      setDashboard(await dashboardApi.getOfficeStaffDashboard());
+      setDashboard(await dashboardApi.getOfficeStaffDashboard(branchId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load branch dashboard.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load branch dashboard.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -44,18 +45,7 @@ export function BranchDashboardShellPage() {
 
   useEffect(() => {
     void loadDashboard();
-  }, [auth.activeContext?.assignment_id]);
-
-  const todayLabel = useMemo(
-    () =>
-      new Date().toLocaleDateString("en-IN", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        year: "numeric"
-      }),
-    []
-  );
+  }, [branchId]);
 
   if (isLoading) {
     return (
@@ -70,48 +60,74 @@ export function BranchDashboardShellPage() {
 
   if (error || dashboard == null) {
     return (
-      <section className="rounded-2xl border border-rose-100 bg-rose-50 p-6 text-rose-700">
-        <div className="flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5" />
-          <p className="font-semibold">{error ?? "Dashboard unavailable."}</p>
+      <section className="grid gap-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+          <Link to="/dashboard/institution" className="hover:text-teal-700">
+            Institution Overview
+          </Link>
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-slate-900">Branch</span>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadDashboard()}
-          className="mt-4 rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-800"
-        >
-          Retry
-        </button>
+
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-6 text-rose-700">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5" />
+            <p className="font-semibold">
+              {error ?? "Branch data unavailable."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadDashboard()}
+            className="mt-4 rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-800"
+          >
+            Retry
+          </button>
+        </div>
       </section>
     );
   }
 
   return (
     <div className="mx-auto max-w-7xl pb-12">
-      {/* HEADER */}
-      <section id="overview" className="mb-6">
+      {/* Sticky Breadcrumb */}
+      <div className="sticky top-0 z-10 -mx-4 mb-6 flex items-center gap-2 border-b border-slate-200/50 bg-slate-50/90 px-4 py-3 text-sm font-medium text-slate-500 shadow-sm backdrop-blur-md sm:-mx-6 sm:px-6 md:-mx-8 md:px-8">
+        <Link
+          to="/dashboard/institution"
+          className="transition-colors hover:text-teal-700 hover:underline"
+        >
+          Institution Overview
+        </Link>
+        <span className="text-slate-300">/</span>
+        <span className="font-bold text-slate-900">
+          {dashboard.scope.branch_name}
+        </span>
+      </div>
+
+      {/* 1. Branch Overview Header */}
+      <section className="mb-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Principal Dashboard</p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 md:text-4xl">
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-700">
                 Branch Overview
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 md:text-4xl">
+                {dashboard.scope.branch_name}
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">
-                Reviewing operations and performance for {dashboard.scope.branch_name ?? "the current branch"}.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+                Monitoring branch operations and current status.
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="font-bold text-slate-900">{auth.appUser?.display_name ?? "Principal"}</span>
-              <span>{todayLabel}</span>
-              <div className="flex items-center justify-between gap-4 mt-1">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Updated {formatDate(dashboard.generated_at)}
                 </span>
                 <button
                   type="button"
                   onClick={() => void loadDashboard()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-600 transition-colors hover:bg-slate-300"
                 >
                   <RefreshCw className="h-3 w-3" />
                   REFRESH
@@ -130,58 +146,53 @@ export function BranchDashboardShellPage() {
           ))}
         </section>
 
-        {/* ATTENDANCE REVIEW & INBOX */}
-        <section id="attendance-review" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
-              <CalendarCheck className="h-5 w-5 text-blue-600" />
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Attendance Review</h2>
-                <p className="text-xs font-medium text-slate-500">Review and finalize attendance sessions.</p>
-              </div>
+        {/* ATTENDANCE OVERVIEW (READ-ONLY) */}
+        <Link to="/attendance" className="block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 hover:shadow-md">
+          <div className="mb-5 flex items-center gap-2 border-b border-slate-100 pb-4">
+            <CalendarCheck className="h-5 w-5 text-teal-600" />
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Attendance</h2>
+              <p className="text-xs font-medium text-slate-500">Branch-level attendance status.</p>
             </div>
           </div>
           
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Sessions</p>
               <p className="mt-1 text-2xl font-black text-slate-900">{dashboard.attendance.sessions_today}</p>
             </div>
             <div className="rounded-xl bg-amber-50 p-4 border border-amber-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Draft</p>
-              <p className="mt-1 text-2xl font-black text-amber-900">{dashboard.attendance.draft_sessions}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Not Started</p>
+              <p className="mt-1 text-2xl font-black text-amber-900">{dashboard.attendance.sections_without_session}</p>
             </div>
-            {/* "To Review" gets the strongest visual emphasis */}
-            <div className="rounded-xl bg-blue-600 p-4 border border-blue-700 shadow-md text-white">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-200">To Review</p>
-              <p className="mt-1 text-2xl font-black text-white">{dashboard.attendance.submitted_sessions}</p>
+            <div className="rounded-xl bg-purple-50 p-4 border border-purple-100">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Draft</p>
+              <p className="mt-1 text-2xl font-black text-purple-900">{dashboard.attendance.draft_sessions}</p>
+            </div>
+            <div className="rounded-xl bg-blue-50 p-4 border border-blue-100">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Pending Review</p>
+              <p className="mt-1 text-2xl font-black text-blue-900">{dashboard.attendance.submitted_sessions}</p>
             </div>
             <div className="rounded-xl bg-emerald-50 p-4 border border-emerald-100">
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Finalized</p>
               <p className="mt-1 text-2xl font-black text-emerald-900">{dashboard.attendance.finalized_sessions}</p>
             </div>
           </div>
-
-          {/* Principal Inbox Component */}
-          <div className="mt-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">Principal Inbox</p>
-            <PrincipalInbox />
-          </div>
-        </section>
+        </Link>
 
         {/* STUDENTS + FINANCIAL */}
-        <div id="students-financial" className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {/* STUDENTS */}
           <Link to="/students" className="block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 hover:shadow-md">
             <div className="mb-5 flex items-center gap-2 border-b border-slate-100 pb-4">
               <GraduationCap className="h-5 w-5 text-indigo-600" />
-              <h2 className="text-lg font-bold text-slate-900">Students</h2>
+              <h2 className="text-lg font-bold text-slate-900">Student Operations</h2>
             </div>
             <div className="grid gap-2">
-              <InfoRow label="Total active students" value={dashboard.students.active_students} />
+              <InfoRow label="Active students" value={dashboard.students.active_students} />
               <InfoRow label="Admissions today" value={dashboard.students.students_created_today} />
-              <InfoRow label="Missing guardian contacts" value={dashboard.students.missing_guardian_contact} danger={Number(dashboard.students.missing_guardian_contact) > 0} />
-              <InfoRow label="Missing fee accounts" value={dashboard.students.missing_fee_accounts} danger={Number(dashboard.students.missing_fee_accounts) > 0} />
+              <InfoRow label="Missing guardian contacts" value={dashboard.students.missing_guardian_contact} />
+              <InfoRow label="Missing fee accounts" value={dashboard.students.missing_fee_accounts} />
             </div>
           </Link>
 
@@ -192,16 +203,16 @@ export function BranchDashboardShellPage() {
               <h2 className="text-lg font-bold text-slate-900">Financial Overview</h2>
             </div>
             <div className="grid gap-2">
-              <InfoRow label="Net payable" value={formatCurrency(dashboard.fees.net_payable)} />
-              <InfoRow label="Paid" value={formatCurrency(dashboard.fees.paid)} />
-              <InfoRow label="Outstanding" value={formatCurrency(dashboard.fees.outstanding)} danger={Number(dashboard.fees.outstanding) > 0} />
-              <InfoRow label="Payments today" value={formatCurrency(dashboard.fees.payments_today)} />
+              <InfoRow label="Net payable" value={dashboard.fees.net_payable} />
+              <InfoRow label="Paid" value={dashboard.fees.paid} />
+              <InfoRow label="Outstanding" value={dashboard.fees.outstanding} danger={Number(dashboard.fees.outstanding) > 0} />
+              <InfoRow label="Payments today" value={dashboard.fees.payments_today} />
             </div>
           </Link>
         </div>
 
         {/* EXAMS + IMPORTS */}
-        <div id="exams-imports" className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {/* EXAMS */}
           <Link to="/examinations" className="block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 hover:shadow-md">
             <div className="mb-5 flex items-center gap-2 border-b border-slate-100 pb-4">
@@ -210,7 +221,7 @@ export function BranchDashboardShellPage() {
             </div>
             <div className="grid gap-2">
               <InfoRow label="Upcoming exams" value={dashboard.examinations.upcoming_exams} />
-              <InfoRow label="Marks pending" value={dashboard.examinations.marks_entry_pending} danger={Number(dashboard.examinations.marks_entry_pending) > 0} />
+              <InfoRow label="Marks pending" value={dashboard.examinations.marks_entry_pending} />
             </div>
           </Link>
 

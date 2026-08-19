@@ -30,6 +30,9 @@ export const attendanceApi = {
   finalizeSession: (sessionId: string) =>
     apiPost<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/finalize`, {}),
 
+  returnSession: (sessionId: string, payload: { reason?: string }) =>
+    apiPost<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/return`, payload),
+
   // --- Academic Lookups (proxying existing backend endpoints) ---
   getBranches: () =>
     apiGet<LookupItem[]>("/imports/students/lookups/branches"),

@@ -10,8 +10,8 @@ import { PortalSelectionPage } from "../../modules/authentication/pages/PortalSe
 import { SignupRequestPage } from "../../modules/authentication/pages/SignupRequestPage";
 import { AcademicStructurePage } from "../../modules/academic-structure/pages/AcademicStructurePage";
 import { BranchesPage } from "../../modules/branches/pages/BranchesPage";
-import { BranchDashboardShellPage } from "../../modules/dashboard/pages/BranchDashboardShellPage";
-import { DashboardShellPage } from "../../modules/dashboard/pages/DashboardShellPage";
+import { DashboardRouter } from "../../modules/dashboard/pages/DashboardRouter";
+import { DeanBranchViewPage } from "../../modules/institution/pages/DeanBranchViewPage";
 import { ExaminationsContainer } from "../../modules/examinations/routes";
 import { FeesPage } from "../../modules/fees/pages/FeesPage";
 import { FeeTemplatePage } from "../../modules/imports/pages/FeeTemplatePage";
@@ -58,8 +58,8 @@ const router = createBrowserRouter([
       {
         element: <AppShellLayout />,
         children: [
-          protectedPage("/dashboard", <DashboardShellPage />, { module: "dashboard" }),
-          protectedPage("/branch-dashboard", <BranchDashboardShellPage />, { module: "dashboard" }),
+          protectedPage("/dashboard", <DashboardRouter />, { module: "dashboard" }),
+          protectedPage("/dashboard/institution/branch/:branchId", <DeanBranchViewPage />, { module: "dashboard" }),
           protectedPage("/platform-admin", <PlatformDashboardShellPage />, { module: "platform-admin" }),
           protectedPage("/branches", <BranchesPage />, { module: "branches", permission: "branch.view" }),
           protectedPage("/students", <StudentsPage />, { module: "students", permission: "student.view" }),

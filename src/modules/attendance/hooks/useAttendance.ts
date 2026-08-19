@@ -74,6 +74,18 @@ export function useFinalizeAttendance() {
   });
 }
 
+export function useReturnAttendanceSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, reason }: { sessionId: string; reason?: string }) => 
+      attendanceApi.returnSession(sessionId, { reason }),
+    onSuccess: (data: AttendanceSessionResponse) => {
+      queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
+      queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
+    },
+  });
+}
+
 // --- Lookup Hooks ---
 export function useAttendanceBranches() {
   return useQuery({

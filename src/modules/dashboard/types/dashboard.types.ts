@@ -79,3 +79,16 @@ export interface OfficeStaffDashboardResponse {
   imports: DashboardImportSummary;
   examinations: DashboardExamSummary;
 }
+
+export interface DashboardBranchSummary {
+  branch_id: string;
+  branch_name: string;
+  active_students: number;
+  sessions_today: number;
+  sections_without_session: number;
+  fee_outstanding: string;
+}
+
+export interface InstitutionDashboardResponse extends OfficeStaffDashboardResponse {
+  branch_summaries: DashboardBranchSummary[];
+}
