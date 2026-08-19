@@ -841,6 +841,7 @@ export function FeesPage() {
                         <th className="border-b border-slate-200 px-4 py-3">Reference</th>
                         <th className="border-b border-slate-200 px-4 py-3">Posted By</th>
                         <th className="border-b border-slate-200 px-4 py-3">Status</th>
+                        <th className="border-b border-slate-200 px-4 py-3">WhatsApp Notice</th>
                         <th className="border-b border-slate-200 px-4 py-3">Notes</th>
                       </tr>
                     </thead>
@@ -879,6 +880,15 @@ export function FeesPage() {
                             <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
                               {entry.status}
                             </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {entry.entry_type === 'PAYMENT' ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800" title="Dispatched to parent via Meta WhatsApp API">
+                                🟢 WhatsApp Receipt Sent
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-slate-500">{entry.notes ?? "-"}</td>
                         </tr>

@@ -3,18 +3,20 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Search, MapPin, Phone, Mail, CheckCircle2, X, RefreshCw, UserCheck, AlertCircle, Lock } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 
-interface Branch {
-  id: string;
-  code: string;
-  name: string;
-  legal_name?: string;
-  status: string;
-  timezone?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  contact?: any;
-  contact_person?: string;
+  interface Branch {
+    id: string;
+    code: string;
+    name: string;
+    legal_name?: string;
+    status: string;
+    timezone?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    contact?: any;
+    contact_person?: string;
+    principal_user_id?: string;
+
   address_data?: {
     street?: string;
     city?: string;
@@ -226,36 +228,47 @@ export const BranchesPage: React.FC = () => {
     }
   };
 
-  const handleAssignPrincipal = (e: React.FormEvent) => {
+  const handleAssignPrincipal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBranch || !principalUserId) return;
 
     const selectedUser = systemUsers.find((u) => u.id === principalUserId);
     if (!selectedUser) return;
 
+    const currentAssignmentName = getUserAssignment(selectedUser);
+
     if (isAssignedElsewhere(selectedUser, selectedBranch)) {
       const confirmed = window.confirm(
-        `${selectedUser.name} is already assigned to ${selectedUser.branch}. Assigning this user to ${selectedBranch.name} will move their campus assignment. Do you want to proceed?`
+        `${selectedUser.name} is already assigned to ${currentAssignmentName}. Assigning this user to ${selectedBranch.name} will move their campus assignment. Do you want to proceed?`
       );
       if (!confirmed) return;
     }
 
-    setBranches((prev) =>
-      prev.map((b) =>
-        b.id === selectedBranch.id
-          ? {
-              ...b,
-              contact_person: selectedUser.name,
-              contact_data: { ...(b.contact_data || {}), contact_person_name: selectedUser.name },
-            }
-          : b
-      )
-    );
+    try {
+      const res = await fetch(`/api/v1/branches/${selectedBranch.id}/assign-principal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: selectedUser.id,
+          user_name: selectedUser.name,
+        }),
+      });
 
-    setShowAssignPrincipalModal(false);
-    setNotification(`Principal "${selectedUser.name}" assigned to ${selectedBranch.name}!`);
-    setTimeout(() => setNotification(null), 4000);
+      if (res.ok) {
+        await Promise.all([fetchBranches(), fetchUsers()]);
+        setShowAssignPrincipalModal(false);
+        setNotification(`Principal "${selectedUser.name}" assigned to ${selectedBranch.name}!`);
+        setTimeout(() => setNotification(null), 4000);
+      } else {
+        const errTxt = await res.text();
+        alert(`Failed to assign principal: ${errTxt}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to assign principal:', err);
+      alert(`Connection error: ${err.message || 'Server error'}`);
+    }
   };
+
 
   const resetForm = () => {
     setBranchCode('');
@@ -297,11 +310,12 @@ export const BranchesPage: React.FC = () => {
   const branchNames = branches.map((b) => b.name);
 
   const getUserAssignment = (user: SystemUser) => {
-    const matchedBranch = user.branch && branchNames.includes(user.branch) ? user.branch : '';
-    if (matchedBranch) return matchedBranch;
-    const contactBranch = branches.find((b) => b.contact_person === user.name);
-    return contactBranch?.name || '';
+    const idMatch = branches.find((b) => b.principal_user_id === user.id);
+    if (idMatch) return idMatch.name;
+    const nameMatch = user.branch && branchNames.includes(user.branch) ? user.branch : '';
+    return nameMatch || '';
   };
+
 
   const getAssignmentLabel = (user: SystemUser, targetBranch?: Branch | null) => {
     const assignedBranchName = getUserAssignment(user);
@@ -503,9 +517,12 @@ export const BranchesPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <UserCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span className="text-slate-800 font-bold">Assigned User: {typeof b.contact_person === 'string' ? b.contact_person : 'Not Assigned'}</span>
+                  <UserCheck className={`w-3.5 h-3.5 ${b.contact_person && b.contact_person !== 'Not Assigned' ? 'text-teal-600' : 'text-slate-400'} shrink-0`} />
+                  <span className={b.contact_person && b.contact_person !== 'Not Assigned' ? "text-slate-800 font-bold" : "text-slate-500 font-semibold"}>
+                    {b.contact_person && b.contact_person !== 'Not Assigned' ? `Assigned User: ${b.contact_person}` : 'Not Assigned'}
+                  </span>
                 </div>
+
               </div>
 
               <div className="pt-2 flex gap-2">

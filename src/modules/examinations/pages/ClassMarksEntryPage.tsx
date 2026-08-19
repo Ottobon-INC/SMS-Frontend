@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Branch, Exam, ExamSubject, StudentExamRecord } from '../types';
 import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2, Lock } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface StudentItem {
   id: string;
+  enrollmentId?: string;
   admissionNumber: string;
   firstName: string;
   lastName: string;
@@ -20,17 +22,28 @@ interface SectionItem {
 
 interface StudentApiItem {
   id: string;
+  enrollmentId?: string;
   admissionNumber?: string;
   studentNumber?: string;
   displayName?: string;
   name?: string;
 }
 
-export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+
+export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: () => void }> = ({ initialExamId, onBack }) => {
+  const auth = useAuth();
+  const currentSummary = auth.availableContexts?.find(
+    (c) => c.assignment_id === auth.activeContext?.assignment_id
+  );
+  const roleCode = currentSummary?.role?.code || auth.activeContext?.role_codes?.[0] || 'INSTITUTION_ADMIN';
+  const isDean = roleCode === 'INSTITUTION_ADMIN' || roleCode === 'SUPER_ADMIN';
+  const userBranchId = auth.activeContext?.branch_id || currentSummary?.branch?.id;
+
   const [exams, setExams] = useState<Exam[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [selectedExamId, setSelectedExamId] = useState<string>('');
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(isDean ? '' : (userBranchId || ''));
+  const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || '');
+
   const [selectedSectionId, setSelectedSectionId] = useState<string>('');
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [selectedStreamCode, setSelectedStreamCode] = useState<string>('ALL');
@@ -67,55 +80,93 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
 
   const allowedBranches = useMemo(() => {
     if (!selectedExam) return branches;
-    if (selectedExam.scope === 'SINGLE_BRANCH') {
-      const targetId = selectedExam.branchId;
+    const scope = selectedExam.scope || (selectedExam as any).scope;
+    const targetId = selectedExam.branchId || (selectedExam as any).branch_id;
+    const targetIds = selectedExam.branchIds || (selectedExam as any).branch_ids || [];
+    const excludedIds = selectedExam.excludedBranchIds || (selectedExam as any).excluded_branch_ids || [];
+
+    if (scope === 'SINGLE_BRANCH') {
       if (targetId) {
         const filtered = branches.filter((b) => b.id === targetId);
         if (filtered.length > 0) return filtered;
       }
-    } else if (selectedExam.scope === 'SELECTED_BRANCHES') {
-      const targetIds = selectedExam.branchIds || [];
+    } else if (scope === 'SELECTED_BRANCHES') {
       if (targetIds.length > 0) {
         const filtered = branches.filter((b) => targetIds.includes(b.id));
+        if (filtered.length > 0) return filtered;
+      }
+    } else if (scope === 'ALL_BRANCHES') {
+      if (excludedIds.length > 0) {
+        const filtered = branches.filter((b) => !excludedIds.includes(b.id));
         if (filtered.length > 0) return filtered;
       }
     }
     return branches;
   }, [branches, selectedExam]);
 
-  useEffect(() => {
-    if (allowedBranches.length > 0) {
-      if (!allowedBranches.some((b) => b.id === selectedBranchId)) {
-        setSelectedBranchId(allowedBranches[0].id);
-      }
-    }
-  }, [allowedBranches, selectedBranchId]);
 
+  // Batch 1 (Mount): Load Branches and Exams in parallel
   useEffect(() => {
-    examinationsApi.getBranches().then((bList) => {
-      setBranches(bList);
+    Promise.all([
+      examinationsApi.getBranches(),
+      examinationsApi.getExams(isDean ? undefined : (userBranchId || undefined)),
+    ]).then(([bList, examList]) => {
       if (bList && bList.length > 0) {
-        setSelectedBranchId(bList[0].id);
+        setBranches(bList);
+        if (userBranchId && !isDean) {
+          setSelectedBranchId(userBranchId);
+        } else {
+          setSelectedBranchId((curr) => curr || (userBranchId && bList.some((b) => b.id === userBranchId) ? userBranchId : bList[0].id));
+        }
       }
-    });
-    examinationsApi.getExams().then((list) => {
-      setExams(list);
-      if (list.length > 0) setSelectedExamId(list[0].id);
-    });
-  }, []);
+      if (examList && examList.length > 0) {
+        setExams(examList);
+        setSelectedExamId((curr) => {
+          if (initialExamId && examList.some((e) => e.id === initialExamId)) {
+            return initialExamId;
+          }
+          if (curr && examList.some((e) => e.id === curr)) {
+            return curr;
+          }
+          return examList[0].id;
+        });
+      }
+
+    }).catch((err) => console.error('Failed to initialize branches/exams:', err));
+  }, [userBranchId, isDean]);
 
   const [allExamSubjects, setAllExamSubjects] = useState<ExamSubject[]>([]);
 
-  // Load real exam subjects for selected exam
+  // Auto-align selectedBranchId to exam's target branch UUID when a SINGLE_BRANCH exam is selected
   useEffect(() => {
-    if (!selectedExamId) {
-      setAllExamSubjects([]);
-      return;
+    if (!selectedExam) return;
+    const targetBranchUuid = selectedExam.branchId || (selectedExam as any).branch_id;
+    if (targetBranchUuid && isDean && selectedBranchId !== targetBranchUuid) {
+      setSelectedBranchId(targetBranchUuid);
     }
-    examinationsApi.getExamSubjects(selectedExamId).then((subList) => {
+  }, [selectedExam, isDean, selectedBranchId]);
+
+  // Batch 2: Load ExamSubjects and Sections in parallel when selectedExamId or selectedBranchId changes
+  useEffect(() => {
+    if (!selectedExamId) return;
+
+
+    const fetchBranchId = !isDean ? userBranchId : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+
+    Promise.all([
+      examinationsApi.getExamSubjects(selectedExamId),
+      fetchBranchId ? fetch(`/api/v1/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`).then((r) => r.ok ? r.json() : []) : Promise.resolve([]),
+    ]).then(([subList, secList]) => {
       setAllExamSubjects(subList || []);
-    });
-  }, [selectedExamId]);
+      const sectionsArray = (secList || []) as SectionItem[];
+      setSections(sectionsArray);
+      if (sectionsArray.length > 0) {
+        setSelectedSectionId((curr) => (curr && sectionsArray.some((s) => s.id === curr) ? curr : sectionsArray[0].id));
+      } else {
+        setSelectedSectionId('');
+      }
+    }).catch((err) => console.error('Failed to load exam subjects/sections:', err));
+  }, [selectedExamId, selectedBranchId, isDean, userBranchId]);
 
   // Dynamically filter displaySubjects for the selected section's stream/programme
   const displaySubjects = useMemo(() => {
@@ -143,69 +194,37 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     });
   }, [allExamSubjects, selectedSectionId, sections]);
 
-  // Load real enrolled students for selected section
+  // Batch 3: Load Enrolled Students & Student Exam Records in parallel when selectedSectionId changes
   useEffect(() => {
-    if (!selectedSectionId) {
+    if (!selectedSectionId || !selectedExamId) {
       setSectionStudents([]);
+      setRecordsMap({});
       return;
     }
-    fetch(`/api/v1/students?section_id=${selectedSectionId}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((stList) => {
-        const mapped = ((stList || []) as StudentApiItem[]).map((student) => ({
-          id: student.id,
-          admissionNumber: student.admissionNumber || student.studentNumber || 'STD-001',
-          firstName: student.displayName ? student.displayName.split(' ')[0] : student.name || 'Student',
-          lastName:
-            student.displayName && student.displayName.split(' ').length > 1
-              ? student.displayName.split(' ').slice(1).join(' ')
-              : '',
-        }));
-        setSectionStudents(mapped);
-      })
-      .catch(() => setSectionStudents([]));
-  }, [selectedSectionId]);
 
-  // Dynamically load sections for the selected branch & exam
-  const fetchSections = async () => {
-    if (!selectedBranchId) return;
-    const url = `/api/v1/branches/${selectedBranchId}/sections${selectedExamId ? `?exam_id=${selectedExamId}` : ''}`;
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-              const secList = (await res.json()) as SectionItem[];
-        if (secList && secList.length > 0) {
-          setSections(secList);
-          if (!selectedSectionId || !(secList as SectionItem[]).some((section) => section.id === selectedSectionId)) {
-            setSelectedSectionId(secList[0].id);
-          }
-        } else {
-          setSections([]);
-          setSelectedSectionId('');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load branch sections:', err);
-    }
-  };
+    Promise.all([
+      fetch(`/api/v1/students?section_id=${selectedSectionId}`).then((r) => (r.ok ? r.json() : [])),
+      examinationsApi.getStudentExamRecords(selectedExamId, selectedSectionId),
+    ]).then(([stList, records]) => {
+      const mappedStudents = ((stList || []) as StudentApiItem[]).map((student) => ({
+        id: student.id,
+        enrollmentId: student.enrollmentId || student.id,
+        admissionNumber: student.admissionNumber || student.studentNumber || 'STD-001',
+        firstName: student.displayName ? student.displayName.split(' ')[0] : student.name || 'Student',
+        lastName: student.displayName && student.displayName.split(' ').length > 1 ? student.displayName.split(' ').slice(1).join(' ') : '',
+      }));
+      setSectionStudents(mappedStudents);
 
-  useEffect(() => {
-    fetchSections();
-  }, [selectedBranchId, selectedExamId]);
-
-  useEffect(() => {
-    if (!selectedExamId || !selectedSectionId) return;
-    examinationsApi.getStudentExamRecords(selectedExamId, selectedSectionId).then((records) => {
       const map: Record<string, StudentExamRecord> = {};
       (records || []).forEach((record) => {
-        const stId = record.studentId;
-        if (stId) {
-          map[stId] = record;
+        if (record.studentId) {
+          map[record.studentId] = record;
         }
       });
       setRecordsMap(map);
-    });
-  }, [selectedExamId, selectedSectionId]);
+    }).catch((err) => console.error('Failed to load section students/records:', err));
+  }, [selectedSectionId, selectedExamId]);
+
 
   const handleSectionSwitchAttempt = (targetSecId: string) => {
     if (targetSecId === selectedSectionId) return;
@@ -230,12 +249,15 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     let finalVal = value;
     if (finalVal >= 0 && finalVal > maxMarks) finalVal = maxMarks;
 
+    const targetStudent = sectionStudents.find((s) => s.id === studentId);
+    const validEnrollmentId = targetStudent?.enrollmentId || studentId;
+
     setIsDirty(true);
     setRecordsMap((prev) => {
       const current = prev[studentId] || {
-        id: `ser-${selectedExamId}-${studentId}`,
+        id: `${selectedExamId}-${studentId}`,
         examId: selectedExamId,
-        enrollmentId: `enr-${studentId}`,
+        enrollmentId: validEnrollmentId,
         studentId,
         sectionId: selectedSectionId,
         subjectMarks: {},
@@ -289,20 +311,55 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     }
   };
 
+  const reloadSections = async () => {
+    const fetchBranchId = !isDean ? userBranchId : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+    if (!fetchBranchId || !selectedExamId) return;
+    try {
+      const res = await fetch(`/api/v1/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`);
+      if (res.ok) {
+        const secList = (await res.json()) as SectionItem[];
+        if (secList) {
+          setSections(secList);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to reload sections overview:', err);
+    }
+  };
+
   const handleSaveDraft = async () => {
     if (sectionStudents.length === 0) {
       setNotification('No enrolled students in this section to save.');
       setTimeout(() => setNotification(null), 3000);
       return;
     }
+
     setIsSavingDraft(true);
-    const list = Object.values(recordsMap).map((r) => ({ ...r, status: 'DRAFT' as const }));
+    const list = sectionStudents.map((st) => {
+      const existing = recordsMap[st.id];
+      const validEnrollmentId = st.enrollmentId || st.id;
+      if (existing) {
+        const cleanEnr = existing.enrollmentId && !existing.enrollmentId.startsWith('enr-') ? existing.enrollmentId : validEnrollmentId;
+        return { ...existing, enrollmentId: cleanEnr, status: 'DRAFT' as const };
+      }
+      return {
+        id: `${selectedExamId}-${st.id}`,
+        examId: selectedExamId,
+        enrollmentId: validEnrollmentId,
+        studentId: st.id,
+        sectionId: selectedSectionId,
+        subjectMarks: {},
+        status: 'DRAFT' as const,
+        enteredBy: 'Staff User',
+        updatedAt: new Date().toISOString(),
+      };
+    });
     await examinationsApi.bulkSaveStudentExamRecords(selectedExamId, list);
     setIsDirty(false);
     setNotification('Draft class marks saved successfully!');
     setIsSavingDraft(false);
     await new Promise((r) => setTimeout(r, 250));
-    await fetchSections();
+    await reloadSections();
     setTimeout(() => setNotification(null), 4000);
     if (showUnsavedWarningModal && pendingTargetSectionId) {
       setSelectedSectionId(pendingTargetSectionId);
@@ -325,17 +382,38 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
     }
 
     setIsSubmitting(true);
-    const list = Object.values(recordsMap).map((r) => ({ ...r, status: 'SUBMITTED' as const }));
+    const list = sectionStudents.map((st) => {
+      const existing = recordsMap[st.id];
+      const validEnrollmentId = st.enrollmentId || st.id;
+      if (existing) {
+        const cleanEnr = existing.enrollmentId && !existing.enrollmentId.startsWith('enr-') ? existing.enrollmentId : validEnrollmentId;
+        return { ...existing, enrollmentId: cleanEnr, status: 'SUBMITTED' as const };
+      }
+      return {
+        id: `${selectedExamId}-${st.id}`,
+        examId: selectedExamId,
+        enrollmentId: validEnrollmentId,
+        studentId: st.id,
+        sectionId: selectedSectionId,
+        subjectMarks: {},
+        status: 'SUBMITTED' as const,
+        enteredBy: 'Staff User',
+        updatedAt: new Date().toISOString(),
+      };
+    });
     await examinationsApi.bulkSaveStudentExamRecords(selectedExamId, list);
+    setIsDirty(false);
 
     const currentSec = sections.find((s) => s.id === selectedSectionId);
     const secName = currentSec ? currentSec.name : 'Selected Section';
     setNotification(`Class marks for section ${secName} submitted to Principal for review!`);
     setIsSubmitting(false);
     await new Promise((r) => setTimeout(r, 250));
-    await fetchSections();
+    await reloadSections();
     setTimeout(() => setNotification(null), 4000);
   };
+
+
 
   // Live Summary Stats
   const totalStudents = sectionStudents.length;
@@ -355,7 +433,6 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
   });
 
   // Role-Based Access Control (RBAC) Scoping
-  const isDean = true;
   const isPrincipalRole = true;
   const activeSec = sections.find((s) => s.id === selectedSectionId);
   const activeSectionStatus = activeSec?.status || 'DRAFT';
@@ -392,6 +469,46 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
           </button>
         )}
       </div>
+
+      {/* PROMINENT ACTIVE ASSESSMENT HEADER BANNER */}
+      {selectedExam && (
+        <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-indigo-900 text-white p-5 rounded-3xl border border-teal-800 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 bg-teal-500/20 border border-teal-400/30 text-teal-300 text-[10px] font-extrabold rounded-full uppercase tracking-wider">
+                Active Assessment
+              </span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                selectedExam.status === 'PUBLISHED' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40' :
+                selectedExam.status === 'SUBMITTED' ? 'bg-blue-500/30 text-blue-300 border border-blue-400/40' :
+                'bg-amber-500/30 text-amber-300 border border-amber-400/40'
+              }`}>
+                {selectedExam.status}
+              </span>
+            </div>
+            <h2 className="text-xl font-black text-white flex items-center gap-2">
+              📌 {selectedExam.name} <span className="text-sm font-semibold text-slate-300">({selectedExam.type})</span>
+            </h2>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 pt-1">
+              <span className="flex items-center gap-1 font-semibold text-teal-200">
+                📍 Scope: {(selectedExam.scope || (selectedExam as any).scope) === 'SINGLE_BRANCH' ? 'Single Campus' : (selectedExam.scope || (selectedExam as any).scope) === 'SELECTED_BRANCHES' ? 'Multi-Campus' : 'All-Institution'}
+              </span>
+              <span>•</span>
+              <span>🏫 Target Branch: <strong className="text-white">
+                {branches.find((b) => b.id === (selectedExam.branchId || (selectedExam as any).branch_id || selectedBranchId))?.name || 'All Campuses'}
+              </strong></span>
+              {selectedExam.examDate && (
+                <>
+                  <span>•</span>
+                  <span>📅 Exam Date: <strong className="text-teal-300">{selectedExam.examDate}</strong></span>
+                </>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
 
       {/* Section Overview Cards */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
@@ -526,23 +643,8 @@ export const ClassMarksEntryPage: React.FC<{ onBack?: () => void }> = ({ onBack 
             </div>
           )}
 
-          <div>
-            <label htmlFor="select-assessment-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Assessment</label>
-            <select
-              id="select-assessment-input"
-              name="selectedExamId"
-              aria-label="Select Assessment"
-              value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold outline-none"
-            >
-              {exams.map((ex) => (
-                <option key={ex.id} value={ex.id}>
-                  {ex.name} ({ex.type})
-                </option>
-              ))}
-            </select>
-          </div>
+
+
 
           <div>
             <label htmlFor="select-section-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Class Section</label>

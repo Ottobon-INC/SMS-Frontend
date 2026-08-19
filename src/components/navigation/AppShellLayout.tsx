@@ -2,6 +2,7 @@ import { Link, Outlet, useNavigate } from "react-router-dom";
 import { navigationItems } from "../../app/navigation/navigationConfig";
 import { useAuth } from "../../modules/authentication/providers/AuthProvider";
 import { getDashboardPathForContext } from "../../modules/authentication/utils/routing";
+import { GlobalDispatchBanner } from "./GlobalDispatchBanner";
 
 function itemAllowed(
   item: (typeof navigationItems)[number],
@@ -60,6 +61,7 @@ export function AppShellLayout() {
         </nav>
       </aside>
       <section className="content">
+        <GlobalDispatchBanner />
         <Outlet />
       </section>
     </main>

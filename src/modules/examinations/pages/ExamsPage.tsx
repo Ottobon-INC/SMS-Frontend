@@ -1,11 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, Subject, Programme, Branch } from '../types';
-import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle } from 'lucide-react';
+import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '../../authentication/providers/AuthProvider';
+import { useNotificationProgress } from '../../notifications/hooks/useNotificationProgress';
 
-export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
+function ExamDispatchPill({ examId }: { examId: string }) {
+  const { progress } = useNotificationProgress(examId);
+  if (!progress || progress.total_notifications === 0) return null;
+
+  if (progress.is_ongoing) {
+    return (
+      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </span>
+          <span>
+            🟡 WhatsApp Notifications Dispatching: {progress.completed_notifications}/{progress.total_notifications} Sent ({progress.progress_percentage}%)
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-medium flex items-center justify-between">
+      <span>
+        ✅ WhatsApp Dispatches Complete: {progress.completed_notifications}/{progress.total_notifications} Delivered ({progress.progress_percentage}%)
+      </span>
+    </div>
+  );
+}
+
+export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) => void }> = ({
   onNavigateToMarksEntry,
 }) => {
+
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -21,7 +53,20 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   const [exemptBranchId, setExemptBranchId] = useState<string>('branch-hyd-main');
   const [exemptReason, setExemptReason] = useState('');
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('ALL');
+  const auth = useAuth();
+  const currentSummary = auth.availableContexts?.find(
+    (c) => c.assignment_id === auth.activeContext?.assignment_id
+  );
+  const roleCode = currentSummary?.role?.code || auth.activeContext?.role_codes?.[0] || 'INSTITUTION_ADMIN';
+  const isSuperAdminOrDean = roleCode === 'INSTITUTION_ADMIN' || roleCode === 'SUPER_ADMIN';
+  const isPrincipal = roleCode === 'PRINCIPAL' || roleCode === 'BRANCH_ADMIN';
+  const isOfficeStaff = roleCode === 'OFFICE_STAFF' || roleCode === 'OFFICE';
+  const userBranchId = auth.activeContext?.branch_id || currentSummary?.branch?.id;
+  const userBranchName = currentSummary?.branch?.name;
+
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(
+    isSuperAdminOrDean ? 'ALL' : (userBranchId || '11111111-1111-1111-1111-111111111111')
+  );
   const [academicYearId, setAcademicYearId] = useState<string>('');
 
   const [branches, setBranches] = useState<Branch[]>([
@@ -50,7 +95,11 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
     examinationsApi.getBranches().then((b) => {
       if (b && b.length > 0) {
         setBranches(b);
-        setSelectedBranchId((current) => b.some((branch) => branch.id === current) ? current : b[0].id);
+        if (userBranchId && !isSuperAdminOrDean) {
+          setSelectedBranchId(userBranchId);
+        } else {
+          setSelectedBranchId((current) => (current && b.some((branch) => branch.id === current)) ? current : (userBranchId && b.some(branch => branch.id === userBranchId) ? userBranchId : b[0].id));
+        }
         setSelectedBranchIds((current) => current.length > 0 && current.every((id) => b.some((branch) => branch.id === id)) ? current : [b[0].id]);
       }
     });
@@ -70,10 +119,20 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
         if (activeYear) setAcademicYearId(activeYear.id);
       }
     });
-  }, []);
+  }, [userBranchId, isSuperAdminOrDean]);
+
+  useEffect(() => {
+    const fetchBranchId = !isSuperAdminOrDean ? userBranchId : (selectedBranchFilter !== 'ALL' ? selectedBranchFilter : undefined);
+    examinationsApi.getExams(fetchBranchId || undefined).then((list) => {
+      setExams(list);
+      setLoading(false);
+    });
+  }, [userBranchId, isSuperAdminOrDean, selectedBranchFilter]);
 
   // Modal State for New Exam Creation
   const [showCreateExamModal, setShowCreateExamModal] = useState(false);
+  const [isCreatingExam, setIsCreatingExam] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [examName, setExamName] = useState('');
   const [examType, setExamType] = useState('Quarterly Exam');
   const [examDate, setExamDate] = useState('2026-08-20');
@@ -136,16 +195,17 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
   void showHistoryModal;
   void isPrincipalOrDean;
 
-  const loadExams = async () => {
-    setLoading(true);
+  const loadExams = async (showLoadingSpinner = true) => {
+    if (showLoadingSpinner) setLoading(true);
     const data = await examinationsApi.getExams(selectedBranchFilter);
     setExams(data);
-    setLoading(false);
+    if (showLoadingSpinner) setLoading(false);
   };
 
   useEffect(() => {
-    loadExams();
+    loadExams(true);
   }, [selectedBranchFilter]);
+
 
   // Aggregate subjects for selected course streams
   const getSubjectsForSelectedProgrammes = () => {
@@ -177,6 +237,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
 
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingExam) return;
     setOverlapError(null);
     if (!examName.trim()) return;
     if (!academicYearId) {
@@ -184,75 +245,84 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
       return;
     }
 
-    const targetBranchIds =
-      examScope === 'ALL_BRANCHES'
-        ? branches.map((b) => b.id)
-        : examScope === 'SELECTED_BRANCHES'
-        ? selectedBranchIds
-        : [selectedBranchId];
+    setIsCreatingExam(true);
+    try {
+      const targetBranchIds =
+        examScope === 'ALL_BRANCHES'
+          ? branches.map((b) => b.id)
+          : examScope === 'SELECTED_BRANCHES'
+          ? selectedBranchIds
+          : [selectedBranchId];
 
-    const overlapResult = await examinationsApi.checkOverlap({
-      examDate,
-      targetBranchIds,
-      programmeId: selectedProgrammeIds[0] || 'prog-mpc',
-    });
+      const overlapResult = await examinationsApi.checkOverlap({
+        examDate,
+        targetBranchIds,
+        programmeId: selectedProgrammeIds[0] || 'prog-mpc',
+      });
 
-    if (overlapResult.hasOverlap) {
-      setOverlapError(
-        `Overlap Lock Triggered: Exam "${overlapResult.conflictingExamName || 'Scheduled Exam'}" is already scheduled on ${examDate} for this stream.`
-      );
-      return;
-    }
+      if (overlapResult.hasOverlap) {
+        setOverlapError(
+          `Overlap Lock Triggered: Exam "${overlapResult.conflictingExamName || 'Scheduled Exam'}" is already scheduled on ${examDate} for this stream.`
+        );
+        return;
+      }
 
-    const activeSubjects = availableProgrammeSubjects.filter((s) => !optedOutSubjectIds.includes(s.id));
-    if (activeSubjects.length === 0) {
-      setOverlapError('Please include at least one subject for this assessment.');
-      return;
-    }
+      const activeSubjects = availableProgrammeSubjects.filter((s) => !optedOutSubjectIds.includes(s.id));
+      if (activeSubjects.length === 0) {
+        setOverlapError('Please include at least one subject for this assessment.');
+        return;
+      }
 
-    const examSubjects: Partial<ExamSubject>[] = activeSubjects.map((sub) => {
-      const cfg = subjectConfigs[sub.id] || { maxMarks: sub.maxMarks, passMarks: sub.passMarks };
-      return {
-        subjectId: sub.id,
-        subjectName: sub.name,
-        subjectCode: sub.code,
-        maximumMarks: Number(cfg.maxMarks) || 100,
-        passMarks: Number(cfg.passMarks) || 35,
+      const examSubjects: Partial<ExamSubject>[] = activeSubjects.map((sub) => {
+        const cfg = subjectConfigs[sub.id] || { maxMarks: sub.maxMarks, passMarks: sub.passMarks };
+        return {
+          subjectId: sub.id,
+          subjectName: sub.name,
+          subjectCode: sub.code,
+          maximumMarks: Number(cfg.maxMarks) || 100,
+          passMarks: Number(cfg.passMarks) || 35,
+        };
+      });
+
+      const newExamPayload: Partial<Exam> = {
+        name: examName.trim(),
+        type: examType,
+        scope: examScope,
+        branchId: examScope === 'SINGLE_BRANCH' ? selectedBranchId : undefined,
+        branchIds: targetBranchIds,
+        academicYearId,
+        programmeId: selectedProgrammeIds[0] || 'prog-mpc',
+        programmeIds: selectedProgrammeIds,
+        examDate: examDate,
+        marksEntryDeadline: '2026-08-25',
+        status: 'DRAFT',
       };
-    });
 
-    const newExamPayload: Partial<Exam> = {
-      name: examName.trim(),
-      type: examType,
-      scope: examScope,
-      branchId: examScope === 'SINGLE_BRANCH' ? selectedBranchId : undefined,
-      branchIds: targetBranchIds,
-      academicYearId,
-      programmeId: selectedProgrammeIds[0] || 'prog-mpc',
-      programmeIds: selectedProgrammeIds,
-      examDate: examDate,
-      marksEntryDeadline: '2026-08-25',
-      status: 'DRAFT',
-    };
+      await examinationsApi.createExam(newExamPayload, examSubjects);
+      setExamName('');
+      setShowCreateExamModal(false);
+      loadExams();
 
-    await examinationsApi.createExam(newExamPayload, examSubjects);
-    setExamName('');
-    setShowCreateExamModal(false);
-    loadExams();
-
-    setNotification(`New assessment "${newExamPayload.name}" created! Staff can now enter class subject marks.`);
-    setTimeout(() => setNotification(null), 5000);
+      setNotification(`New assessment "${newExamPayload.name}" created! Staff can now enter class subject marks.`);
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err) {
+      setOverlapError(err instanceof Error ? err.message : 'Failed to create assessment.');
+    } finally {
+      setIsCreatingExam(false);
+    }
   };
 
   const handlePublishExamResults = async () => {
-    if (!examToPublish) return;
+    if (!examToPublish || isPublishing) return;
     setPublishError(null);
+    setIsPublishing(true);
     try {
       await examinationsApi.publishExam(examToPublish);
+      setExams((prev) => prev.map((ex) => (ex.id === examToPublish ? { ...ex, status: 'PUBLISHED' } : ex)));
       setShowPublishModal(false);
       setExamToPublish(null);
       setPublishError(null);
-      loadExams();
+      loadExams(false);
       setNotification('Assessment results published! WhatsApp parent notifications dispatched on server.');
       setTimeout(() => setNotification(null), 5000);
     } catch (err: unknown) {
@@ -261,16 +331,19 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
           ? err.message
           : 'Cannot publish assessment until all active student sections submit marks.',
       );
+    } finally {
+      setIsPublishing(false);
     }
   };
 
   const handleReturnExam = async () => {
     if (!examToReturn || !returnReason.trim()) return;
     await examinationsApi.returnForCorrection(examToReturn, returnReason.trim());
+    setExams((prev) => prev.map((ex) => (ex.id === examToReturn ? { ...ex, status: 'RETURNED' } : ex)));
     setShowReturnModal(false);
     setExamToReturn(null);
     setReturnReason('');
-    loadExams();
+    loadExams(false);
     setNotification('Exam returned to staff for correction.');
     setTimeout(() => setNotification(null), 5000);
   };
@@ -281,7 +354,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
     setShowExemptBranchModal(false);
     setExamToExempt(null);
     setExemptReason('');
-    loadExams();
+    loadExams(false);
     setNotification('Campus exempted successfully!');
     setTimeout(() => setNotification(null), 5000);
   };
@@ -310,29 +383,44 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={selectedBranchFilter}
-              onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="ALL">All Campus Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {isSuperAdminOrDean ? (
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={selectedBranchFilter}
+                onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="ALL">All Campus Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span>🏫 Assigned Campus: {branches.find(b => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
+              <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCreateExamModal(true)}
-              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" /> Create Assessment
-            </button>
+            {(isSuperAdminOrDean || isPrincipal) && (
+              <button
+                onClick={() => {
+                  if (isPrincipal && userBranchId) {
+                    setExamScope('SINGLE_BRANCH');
+                    setSelectedBranchId(userBranchId);
+                  }
+                  setShowCreateExamModal(true);
+                }}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Create Assessment
+              </button>
+            )}
 
             {onNavigateToMarksEntry && (
               <button
@@ -399,30 +487,34 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                       <span><strong>Return Note:</strong> {exam.returnReason}</span>
                     </div>
                   )}
+                  <ExamDispatchPill examId={exam.id} />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   {onNavigateToMarksEntry && (
                     <button
-                      onClick={onNavigateToMarksEntry}
+                      onClick={() => onNavigateToMarksEntry(exam.id)}
                       className="px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl font-bold text-xs flex items-center gap-1.5"
                     >
                       <GraduationCap className="w-4 h-4 text-teal-600" /> Enter Marks
                     </button>
                   )}
 
-                  <button
-                    onClick={() => {
-                      setExamToExempt(exam.id);
-                      setShowExemptBranchModal(true);
-                    }}
-                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
-                    title="Exempt or opt-out a campus branch from this assessment"
-                  >
-                    <AlertTriangle className="w-4 h-4 text-purple-600" /> Exempt / Opt-Out Campus
-                  </button>
 
-                  {exam.status === 'SUBMITTED' && (
+                  {isSuperAdminOrDean && (
+                    <button
+                      onClick={() => {
+                        setExamToExempt(exam.id);
+                        setShowExemptBranchModal(true);
+                      }}
+                      className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      title="Exempt or opt-out a campus branch from this assessment"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-purple-600" /> Exempt / Opt-Out Campus
+                    </button>
+                  )}
+
+                  {(isSuperAdminOrDean || isPrincipal) && exam.status === 'SUBMITTED' && (
                     <button
                       onClick={() => {
                         setExamToReturn(exam.id);
@@ -434,7 +526,10 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                     </button>
                   )}
 
-                  {(exam.status === 'SUBMITTED' || exam.status === 'DRAFT') && (
+                  {(
+                    isSuperAdminOrDean ||
+                    (isPrincipal && (exam.scope === 'SINGLE_BRANCH' && (!exam.branchId || exam.branchId === userBranchId)))
+                  ) && (exam.status === 'SUBMITTED' || exam.status === 'DRAFT') && (
                     <button
                       onClick={() => {
                         setExamToPublish(exam.id);
@@ -535,7 +630,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                   >
                     Single Campus
                   </button>
-                  {isDean && (
+                  {isSuperAdminOrDean && (
                     <button
                       type="button"
                       onClick={() => setExamScope('ALL_BRANCHES')}
@@ -548,7 +643,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                       All Campuses (Dean)
                     </button>
                   )}
-                  {isDean && (
+                  {isSuperAdminOrDean && (
                     <button
                       type="button"
                       onClick={() => setExamScope('SELECTED_BRANCHES')}
@@ -565,17 +660,24 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
 
                 {examScope === 'SINGLE_BRANCH' && (
                   <div className="pt-2">
-                    <select
-                      value={selectedBranchId}
-                      onChange={(e) => setSelectedBranchId(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium"
-                    >
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
+                    {isSuperAdminOrDean ? (
+                      <select
+                        value={selectedBranchId}
+                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium"
+                      >
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span>🏫 Campus Branch: {branches.find((b) => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
+                        <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked to your Branch</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -753,9 +855,16 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 shadow-sm cursor-pointer"
+                  disabled={isCreatingExam}
+                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Create Assessment
+                  {isCreatingExam ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Creating...
+                    </>
+                  ) : (
+                    'Create Assessment'
+                  )}
                 </button>
               </div>
             </form>
@@ -866,8 +975,18 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: () => void }> = ({
               >
                 Cancel
               </button>
-              <button onClick={handlePublishExamResults} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl cursor-pointer">
-                Approve & Publish
+              <button
+                onClick={handlePublishExamResults}
+                disabled={isPublishing}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Publishing...
+                  </>
+                ) : (
+                  'Approve & Publish'
+                )}
               </button>
             </div>
           </div>
