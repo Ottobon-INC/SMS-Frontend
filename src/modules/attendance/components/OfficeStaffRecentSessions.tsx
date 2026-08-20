@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAttendanceSessions } from "../hooks/useAttendance";
 import { AlertCircle, Loader2, CheckCircle2, Clock, FileCheck, ArrowRight, History } from "lucide-react";
+import type { AttendanceSessionListItem } from "../types/attendance.types";
 
 const statusConfig = {
   SUBMITTED: {
@@ -52,7 +53,7 @@ export const OfficeStaffRecentSessions: React.FC = () => {
     return null;
   }
 
-  const renderSessionCard = (session: any) => {
+  const renderSessionCard = (session: AttendanceSessionListItem) => {
     const cfg = statusConfig[session.status as keyof typeof statusConfig] ?? statusConfig.DRAFT;
     const dateObj = new Date(session.attendanceDate + "T00:00:00");
     const isFinalized = session.status === "FINALIZED";

@@ -135,7 +135,7 @@ export const StudentsPage: React.FC = () => {
   const fetchBranchId = isTenantLevel ? (branchFilter === 'PENDING' ? undefined : branchFilter) : undefined;
   const shouldFetch = !isTenantLevel || branchFilter !== 'PENDING';
   
-  const { data: students = [], isLoading: loading, error: queryError, refetch } = useStudents(fetchBranchId, shouldFetch);
+  const { data: students = [], isLoading: loading, refetch } = useStudents(fetchBranchId, shouldFetch);
   
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');

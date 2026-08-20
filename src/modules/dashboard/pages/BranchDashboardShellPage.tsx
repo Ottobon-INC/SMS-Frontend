@@ -16,7 +16,6 @@ import { useAuth } from "../../authentication/providers/AuthProvider";
 import {
   SummaryCard,
   InfoRow,
-  RecentList,
   formatCurrency,
   formatDate
 } from "../components/DashboardWidgets";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   Loader2,
@@ -19,7 +19,6 @@ import {
   SummaryCard,
   QuickActionButton,
   InfoRow,
-  RecentList,
   formatDate
 } from "../components/DashboardWidgets";
 

@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAttendanceSessions } from "../hooks/useAttendance";
 import { AlertCircle, Loader2, CheckCircle2, Clock, FileCheck, ArrowRight } from "lucide-react";
+import type { AttendanceSessionListItem } from "../types/attendance.types";
 
 const statusConfig = {
   SUBMITTED: {
@@ -54,7 +55,10 @@ export const PrincipalInbox: React.FC = () => {
   const pendingSessions = sessions.filter((s) => s.status === "SUBMITTED");
 
   // Helper function to render a session card
-  const renderSessionCard = (session: any, isFinalized: boolean = false) => {
+  const renderSessionCard = (
+    session: AttendanceSessionListItem,
+    isFinalized = false,
+  ) => {
     const cfg = statusConfig[session.status as keyof typeof statusConfig] ?? statusConfig.DRAFT;
     const dateObj = new Date(session.attendanceDate + "T00:00:00");
     

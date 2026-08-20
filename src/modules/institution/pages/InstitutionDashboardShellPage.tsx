@@ -8,7 +8,6 @@ import {
   Loader2,
   RefreshCw,
   Building2,
-  CalendarCheck,
   CalendarDays,
   ChevronRight,
   LayoutDashboard
@@ -19,7 +18,6 @@ import { useAuth } from "../../authentication/providers/AuthProvider";
 import {
   SummaryCard,
   InfoRow,
-  RecentList,
   formatCurrency,
   formatDate,
   formatNumber
