@@ -28,7 +28,9 @@ import { UsersPage } from "../../modules/users/pages/UsersPage";
 import { AttendanceLandingPage } from "../../modules/attendance/pages/AttendanceLandingPage";
 import { AttendanceSessionPage } from "../../modules/attendance/pages/AttendanceSessionPage";
 
-const moduleRoutes = ["notifications", "reports", "audit", "support"];
+import { NotificationsAuditPage } from "../../modules/notifications/pages/NotificationsAuditPage";
+
+const moduleRoutes = ["reports", "audit", "support"];
 
 function protectedPage(
   path: string,
@@ -127,6 +129,9 @@ const router = createBrowserRouter([
           protectedPage("/attendance/session/:sessionId", <AttendanceSessionPage />, {
             module: "attendance",
             permission: "attendance.view"
+          }),
+          protectedPage("/notifications", <NotificationsAuditPage />, {
+            module: "notifications"
           }),
           ...moduleRoutes.map((moduleName) => ({
             element: (

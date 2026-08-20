@@ -8,6 +8,7 @@ import {
   FileClock, LifeBuoy, LogOut, School,
 } from "lucide-react";
 import React, { useState } from "react";
+import { GlobalDispatchBanner } from "./GlobalDispatchBanner";
 
 function itemAllowed(
   item: (typeof navigationItems)[number],
@@ -297,9 +298,9 @@ export function AppShellLayout() {
           </button>
         </div>
       </aside>
-
       {/* ─── Main content ─── */}
       <main style={{ flex: 1, minWidth: 0, marginLeft: COLLAPSED + 20, overflowY: "auto", background: "#f8fafc" }}>
+        <GlobalDispatchBanner />
         <Outlet />
       </main>
     </div>
