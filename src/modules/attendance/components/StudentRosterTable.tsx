@@ -158,14 +158,6 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
                       onClick={() => onMarkStudent(s.enrollmentId, "LEAVE")}
                       activeClass="bg-amber-500 text-white shadow-sm"
                     />
-                    <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                    <MarkButton
-                      label="C"
-                      title="Clear"
-                      active={currentStatus === "UNMARKED" || !currentStatus}
-                      onClick={() => onMarkStudent(s.enrollmentId, "UNMARKED")}
-                      activeClass="bg-slate-300 text-slate-700 shadow-sm"
-                    />
                   </div>
                 ) : (
                   <StatusBadge status={currentStatus} />

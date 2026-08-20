@@ -42,6 +42,7 @@ export interface AttendanceSessionResponse {
   submittedAt?: string | null;
   finalizedBy?: string | null;
   finalizedAt?: string | null;
+  revisionReason?: string | null;
   students: AttendanceStudentResponse[];
 }
 
