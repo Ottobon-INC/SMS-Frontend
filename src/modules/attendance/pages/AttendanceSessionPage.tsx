@@ -77,7 +77,18 @@ export const AttendanceSessionPage: React.FC = () => {
     setLocalState((prev) => {
       const next = { ...prev };
       session.students.forEach((s) => {
-        if (next[s.enrollmentId] === "UNMARKED") next[s.enrollmentId] = "PRESENT";
+        next[s.enrollmentId] = "PRESENT";
+      });
+      return next;
+    });
+  };
+
+  const handleClearAll = () => {
+    if (session?.status !== "DRAFT") return;
+    setLocalState((prev) => {
+      const next = { ...prev };
+      session.students.forEach((s) => {
+        next[s.enrollmentId] = "UNMARKED";
       });
       return next;
     });
@@ -295,6 +306,15 @@ export const AttendanceSessionPage: React.FC = () => {
             <p>This session is still being prepared by Office Staff and has not been submitted yet.</p>
           </div>
         )}
+        {isDraft && session.revisionReason && (
+          <div className="bg-amber-50 text-amber-800 border border-amber-200 p-4 rounded-xl flex items-start gap-3 text-sm shadow-sm">
+            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" />
+            <div>
+              <p className="font-bold mb-1">Returned for Revision</p>
+              <p className="text-amber-700">{session.revisionReason}</p>
+            </div>
+          </div>
+        )}
         {isFinalized && (
           <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 p-4 rounded-xl flex items-start gap-3 text-sm">
             <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -316,13 +336,22 @@ export const AttendanceSessionPage: React.FC = () => {
             />
           </div>
           {isEditable && (
-            <button
-              onClick={handleMarkAllPresent}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-sm font-semibold transition-all shadow-sm"
-            >
-              <CheckCheck className="w-4 h-4" />
-              Mark All Present
-            </button>
+            <div className="flex-shrink-0 flex items-center gap-2">
+              <button
+                onClick={handleClearAll}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all shadow-sm"
+              >
+                <Undo2 className="w-4 h-4" />
+                Clear All
+              </button>
+              <button
+                onClick={handleMarkAllPresent}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-sm font-semibold transition-all shadow-sm"
+              >
+                <CheckCheck className="w-4 h-4" />
+                Mark All Present
+              </button>
+            </div>
           )}
         </div>
 

@@ -32,8 +32,8 @@ const MODULE_ICONS: Record<string, React.ElementType> = {
 
 const COLLAPSED = 56;
 const EXPANDED  = 256;
-const EASE      = "cubic-bezier(0.4, 0, 0.2, 1)";
-const DURATION  = "200ms";
+const EASE      = "cubic-bezier(0.25, 1, 0.5, 1)";
+const DURATION  = "350ms";
 
 /* shared icon-rail item style */
 const railItem: React.CSSProperties = {
@@ -111,7 +111,7 @@ export function AppShellLayout() {
           <div style={{ 
             opacity: expanded ? 1 : 0, 
             maxWidth: expanded ? 200 : 0,
-            transition: `opacity 130ms ease, max-width ${DURATION} ${EASE}`, 
+            transition: `opacity 250ms ease, max-width ${DURATION} ${EASE}`, 
             overflow: "hidden", 
             whiteSpace: "nowrap" 
           }}>
@@ -150,7 +150,7 @@ export function AppShellLayout() {
             <div style={{ 
               opacity: expanded ? 1 : 0, 
               maxWidth: expanded ? 200 : 0,
-              transition: `opacity 130ms ease, max-width ${DURATION} ${EASE}`, 
+              transition: `opacity 250ms ease, max-width ${DURATION} ${EASE}`, 
               overflow: "hidden", 
               whiteSpace: "nowrap", 
               minWidth: 0, 
@@ -169,7 +169,7 @@ export function AppShellLayout() {
               maxHeight: expanded ? 44 : 0,
               opacity: expanded ? 1 : 0,
               overflow: "hidden",
-              transition: `max-height ${DURATION} ${EASE}, opacity 130ms ease`,
+              transition: `max-height ${DURATION} ${EASE}, opacity 250ms ease`,
               marginTop: expanded ? 6 : 0,
             }}>
               <div style={{ position: "relative" }}>
@@ -191,14 +191,22 @@ export function AppShellLayout() {
         </div>
 
         {/* ── Nav items ── */}
-        <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "2px 6px" }}>
+        <nav 
+          className="app-sidebar-nav"
+          style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "2px 6px", scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          <style>{`
+            .app-sidebar-nav::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           {/* Section label - expanded only */}
           <p style={{
             fontSize: 9.5, fontWeight: 600, color: "#484f58", letterSpacing: "0.1em",
             textTransform: "uppercase",
             padding: "6px 6px 4px",
             opacity: expanded ? 1 : 0,
-            transition: "opacity 130ms ease",
+            transition: "opacity 250ms ease",
             overflow: "hidden", whiteSpace: "nowrap",
           }}>Menu</p>
 
@@ -250,7 +258,7 @@ export function AppShellLayout() {
                           maxWidth: expanded ? 200 : 0,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
-                          transition: `opacity 130ms ease, max-width ${DURATION} ${EASE}`,
+                          transition: `opacity 250ms ease, max-width ${DURATION} ${EASE}`,
                           whiteSpace: "nowrap",
                           display: "block",
                         }}>
@@ -291,7 +299,7 @@ export function AppShellLayout() {
               opacity: expanded ? 1 : 0,
               maxWidth: expanded ? 200 : 0,
               overflow: "hidden",
-              transition: `opacity 130ms ease, max-width ${DURATION} ${EASE}`,
+              transition: `opacity 250ms ease, max-width ${DURATION} ${EASE}`,
               whiteSpace: "nowrap",
               display: "block",
             }}>Sign out</span>
@@ -299,7 +307,16 @@ export function AppShellLayout() {
         </div>
       </aside>
       {/* ─── Main content ─── */}
-      <main style={{ flex: 1, minWidth: 0, marginLeft: COLLAPSED + 20, overflowY: "auto", background: "#f8fafc" }}>
+      <main
+        style={{
+          flex: 1,
+          minWidth: 0,
+          marginLeft: (expanded ? EXPANDED : COLLAPSED) + 20,
+          transition: `margin-left ${DURATION} ${EASE}`,
+          overflowY: "auto",
+          background: "#f8fafc",
+        }}
+      >
         <GlobalDispatchBanner />
         <Outlet />
       </main>
