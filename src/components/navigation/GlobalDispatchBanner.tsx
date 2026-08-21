@@ -1,18 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageSquare, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { notificationsApi, NotificationLog } from '../../modules/notifications/api/notificationsApi';
+import { notificationsApi } from '../../modules/notifications/api/notificationsApi';
+import { useAuth } from '../../modules/authentication/providers/AuthProvider';
+
+const ACTIVE_QUEUE_WINDOW_MS = 2 * 60 * 1000;
+
+function isRecentlyQueued(createdAt: string): boolean {
+  const createdTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdTime)) return false;
+  return Date.now() - createdTime <= ACTIVE_QUEUE_WINDOW_MS;
+}
 
 export function GlobalDispatchBanner() {
+  const auth = useAuth();
   const [ongoingCount, setOngoingCount] = useState<number>(0);
   const [justCompleted, setJustCompleted] = useState<boolean>(false);
 
   useEffect(() => {
+    if (!auth.hasPermission('notification.view')) return;
+
     let prevOngoing = 0;
     const checkOngoing = async () => {
       try {
         const logs = await notificationsApi.getLogs(undefined, 30);
-        const queued = logs.filter((l) => l.delivery_status === 'QUEUED');
+        const queued = logs.filter((l) => l.delivery_status === 'QUEUED' && isRecentlyQueued(l.created_at));
         const currCount = queued.length;
 
         if (prevOngoing > 0 && currCount === 0) {
@@ -29,7 +41,9 @@ export function GlobalDispatchBanner() {
     checkOngoing();
     const interval = setInterval(checkOngoing, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [auth]);
+
+  if (!auth.hasPermission('notification.view')) return null;
 
   if (justCompleted && ongoingCount === 0) {
     return (

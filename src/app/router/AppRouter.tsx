@@ -131,7 +131,8 @@ const router = createBrowserRouter([
             permission: "attendance.view"
           }),
           protectedPage("/notifications", <NotificationsAuditPage />, {
-            module: "notifications"
+            module: "notifications",
+            permission: "notification.view"
           }),
           ...moduleRoutes.map((moduleName) => ({
             element: (

@@ -57,15 +57,16 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   const currentSummary = auth.availableContexts?.find(
     (c) => c.assignment_id === auth.activeContext?.assignment_id
   );
-  const roleCode = currentSummary?.role?.code || auth.activeContext?.role_codes?.[0] || 'INSTITUTION_ADMIN';
-  const isSuperAdminOrDean = roleCode === 'INSTITUTION_ADMIN' || roleCode === 'SUPER_ADMIN';
-  const isPrincipal = roleCode === 'PRINCIPAL' || roleCode === 'BRANCH_ADMIN';
-  const isOfficeStaff = roleCode === 'OFFICE_STAFF' || roleCode === 'OFFICE';
+  
+  const isDean = auth.activeContext?.scope_type === 'TENANT';
+  const canManage = auth.hasPermission('exam.manage');
+  const canPublish = auth.hasPermission('exam.publish');
+  
   const userBranchId = auth.activeContext?.branch_id || currentSummary?.branch?.id;
   const userBranchName = currentSummary?.branch?.name;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(
-    isSuperAdminOrDean ? 'ALL' : (userBranchId || '11111111-1111-1111-1111-111111111111')
+    isDean ? 'ALL' : (userBranchId || '11111111-1111-1111-1111-111111111111')
   );
   const [academicYearId, setAcademicYearId] = useState<string>('');
 
@@ -95,7 +96,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
     examinationsApi.getBranches().then((b) => {
       if (b && b.length > 0) {
         setBranches(b);
-        if (userBranchId && !isSuperAdminOrDean) {
+        if (userBranchId && !isDean) {
           setSelectedBranchId(userBranchId);
         } else {
           setSelectedBranchId((current) => (current && b.some((branch) => branch.id === current)) ? current : (userBranchId && b.some(branch => branch.id === userBranchId) ? userBranchId : b[0].id));
@@ -119,15 +120,15 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         if (activeYear) setAcademicYearId(activeYear.id);
       }
     });
-  }, [userBranchId, isSuperAdminOrDean]);
+  }, [userBranchId, isDean]);
 
   useEffect(() => {
-    const fetchBranchId = !isSuperAdminOrDean ? userBranchId : (selectedBranchFilter !== 'ALL' ? selectedBranchFilter : undefined);
+    const fetchBranchId = !isDean ? userBranchId : (selectedBranchFilter !== 'ALL' ? selectedBranchFilter : undefined);
     examinationsApi.getExams(fetchBranchId || undefined).then((list) => {
       setExams(list);
       setLoading(false);
     });
-  }, [userBranchId, isSuperAdminOrDean, selectedBranchFilter]);
+  }, [userBranchId, isDean, selectedBranchFilter]);
 
   // Modal State for New Exam Creation
   const [showCreateExamModal, setShowCreateExamModal] = useState(false);
@@ -189,11 +190,10 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   }, [examScope, selectedBranchId, selectedBranchIds]);
 
   // Simulated Dean role
-  const isDean = true;
-  const isPrincipalOrDean = true;
+  const canPublishOrDean = true;
   void selectedExam;
   void showHistoryModal;
-  void isPrincipalOrDean;
+  void canPublishOrDean;
 
   const loadExams = async (showLoadingSpinner = true) => {
     if (showLoadingSpinner) setLoading(true);
@@ -339,7 +339,11 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   const handleReturnExam = async () => {
     if (!examToReturn || !returnReason.trim()) return;
     await examinationsApi.returnForCorrection(examToReturn, returnReason.trim());
-    setExams((prev) => prev.map((ex) => (ex.id === examToReturn ? { ...ex, status: 'RETURNED' } : ex)));
+    setExams((prev) =>
+      prev.map((ex) =>
+        ex.id === examToReturn ? { ...ex, status: 'RETURNED_FOR_CORRECTION' } : ex,
+      ),
+    );
     setShowReturnModal(false);
     setExamToReturn(null);
     setReturnReason('');
@@ -383,7 +387,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-          {isSuperAdminOrDean ? (
+          {isDean ? (
             <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
               <Filter className="w-4 h-4 text-slate-400" />
               <select
@@ -407,10 +411,10 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
           )}
 
           <div className="flex items-center gap-2">
-            {(isSuperAdminOrDean || isPrincipal) && (
+            {(isDean || canPublish) && (
               <button
                 onClick={() => {
-                  if (isPrincipal && userBranchId) {
+                  if (canPublish && userBranchId) {
                     setExamScope('SINGLE_BRANCH');
                     setSelectedBranchId(userBranchId);
                   }
@@ -424,7 +428,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
             {onNavigateToMarksEntry && (
               <button
-                onClick={onNavigateToMarksEntry}
+                onClick={() => onNavigateToMarksEntry()}
                 className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
               >
                 <GraduationCap className="w-4 h-4 text-teal-400" /> Enter Class Marks
@@ -501,7 +505,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   )}
 
 
-                  {isSuperAdminOrDean && (
+                  {isDean && (
                     <button
                       onClick={() => {
                         setExamToExempt(exam.id);
@@ -514,7 +518,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                     </button>
                   )}
 
-                  {(isSuperAdminOrDean || isPrincipal) && exam.status === 'SUBMITTED' && (
+                  {(isDean || canPublish) && exam.status === 'SUBMITTED' && (
                     <button
                       onClick={() => {
                         setExamToReturn(exam.id);
@@ -527,8 +531,8 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   )}
 
                   {(
-                    isSuperAdminOrDean ||
-                    (isPrincipal && (exam.scope === 'SINGLE_BRANCH' && (!exam.branchId || exam.branchId === userBranchId)))
+                    isDean ||
+                    (canPublish && (exam.scope === 'SINGLE_BRANCH' && (!exam.branchId || exam.branchId === userBranchId)))
                   ) && (exam.status === 'SUBMITTED' || exam.status === 'DRAFT') && (
                     <button
                       onClick={() => {
@@ -630,7 +634,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   >
                     Single Campus
                   </button>
-                  {isSuperAdminOrDean && (
+                  {isDean && (
                     <button
                       type="button"
                       onClick={() => setExamScope('ALL_BRANCHES')}
@@ -643,7 +647,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                       All Campuses (Dean)
                     </button>
                   )}
-                  {isSuperAdminOrDean && (
+                  {isDean && (
                     <button
                       type="button"
                       onClick={() => setExamScope('SELECTED_BRANCHES')}
@@ -660,7 +664,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
                 {examScope === 'SINGLE_BRANCH' && (
                   <div className="pt-2">
-                    {isSuperAdminOrDean ? (
+                    {isDean ? (
                       <select
                         value={selectedBranchId}
                         onChange={(e) => setSelectedBranchId(e.target.value)}

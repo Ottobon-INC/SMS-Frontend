@@ -1,6 +1,8 @@
 /**
- * API Service for Notifications module using standard fetch.
+ * API service for notification audit and dispatch progress.
  */
+
+import { apiGet, apiPost } from '../../../api/client/apiClient';
 
 export interface NotificationLog {
   id: string;
@@ -40,24 +42,17 @@ export const notificationsApi = {
     const params = new URLSearchParams();
     if (branchId) params.append('branch_id', branchId);
     params.append('limit', limit.toString());
-    const res = await fetch(`/api/v1/whatsapp/logs?${params.toString()}`);
-    if (!res.ok) throw new Error('Failed to fetch notification logs');
-    return res.json();
+    return apiGet<NotificationLog[]>(`/whatsapp/logs?${params.toString()}`);
   },
 
   getProgress: async (entityId: string): Promise<DispatchProgress> => {
-    const res = await fetch(`/api/v1/whatsapp/progress/${entityId}`);
-    if (!res.ok) throw new Error('Failed to fetch dispatch progress');
-    return res.json();
+    return apiGet<DispatchProgress>(`/whatsapp/progress/${entityId}`);
   },
 
   updateGuardianPhone: async (studentId: string, mobile: string): Promise<{ status: string; mobile: string }> => {
-    const res = await fetch('/api/v1/whatsapp/update-guardian-phone', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId, mobile }),
+    return apiPost<{ status: string; mobile: string }>('/whatsapp/update-guardian-phone', {
+      student_id: studentId,
+      mobile,
     });
-    if (!res.ok) throw new Error('Failed to update guardian mobile number');
-    return res.json();
   },
 };

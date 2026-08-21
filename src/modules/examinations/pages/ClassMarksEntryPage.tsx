@@ -3,6 +3,7 @@ import { examinationsApi } from '../api/examinationsApi';
 import { Branch, Exam, ExamSubject, StudentExamRecord } from '../types';
 import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
+import { apiGet } from '../../../api/client/apiClient';
 
 interface StudentItem {
   id: string;
@@ -37,6 +38,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
   );
   const roleCode = currentSummary?.role?.code || auth.activeContext?.role_codes?.[0] || 'INSTITUTION_ADMIN';
   const isDean = roleCode === 'INSTITUTION_ADMIN' || roleCode === 'SUPER_ADMIN';
+  const canPublish = auth.hasPermission('exam.publish');
   const userBranchId = auth.activeContext?.branch_id || currentSummary?.branch?.id;
 
   const [exams, setExams] = useState<Exam[]>([]);
@@ -155,7 +157,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
 
     Promise.all([
       examinationsApi.getExamSubjects(selectedExamId),
-      fetchBranchId ? fetch(`/api/v1/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`).then((r) => r.ok ? r.json() : []) : Promise.resolve([]),
+      fetchBranchId ? apiGet(`/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`).catch(() => []) : Promise.resolve([]),
     ]).then(([subList, secList]) => {
       setAllExamSubjects(subList || []);
       const sectionsArray = (secList || []) as SectionItem[];
@@ -203,7 +205,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
     }
 
     Promise.all([
-      fetch(`/api/v1/students?section_id=${selectedSectionId}`).then((r) => (r.ok ? r.json() : [])),
+      apiGet(`/students?section_id=${selectedSectionId}`).catch(() => []),
       examinationsApi.getStudentExamRecords(selectedExamId, selectedSectionId),
     ]).then(([stList, records]) => {
       const mappedStudents = ((stList || []) as StudentApiItem[]).map((student) => ({
@@ -315,12 +317,9 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
     const fetchBranchId = !isDean ? userBranchId : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
     if (!fetchBranchId || !selectedExamId) return;
     try {
-      const res = await fetch(`/api/v1/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`);
-      if (res.ok) {
-        const secList = (await res.json()) as SectionItem[];
-        if (secList) {
-          setSections(secList);
-        }
+      const secList = (await apiGet(`/branches/${fetchBranchId}/sections?exam_id=${selectedExamId}`)) as SectionItem[];
+      if (secList) {
+        setSections(secList);
       }
     } catch (err) {
       console.error('Failed to reload sections overview:', err);
@@ -406,7 +405,10 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
 
     const currentSec = sections.find((s) => s.id === selectedSectionId);
     const secName = currentSec ? currentSec.name : 'Selected Section';
-    setNotification(`Class marks for section ${secName} submitted to Principal for review!`);
+    const successMsg = canPublish 
+      ? `Class marks for section ${secName} locked and saved!` 
+      : `Class marks for section ${secName} submitted to Principal for review!`;
+    setNotification(successMsg);
     setIsSubmitting(false);
     await new Promise((r) => setTimeout(r, 250));
     await reloadSections();
@@ -433,10 +435,12 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
   });
 
   // Role-Based Access Control (RBAC) Scoping
-  const isPrincipalRole = true;
+  
   const activeSec = sections.find((s) => s.id === selectedSectionId);
   const activeSectionStatus = activeSec?.status || 'DRAFT';
-  const isLockedForTeacher = !isPrincipalRole && (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED');
+  const isLockedForTeacher = !canPublish && 
+    (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED') &&
+    selectedExam?.status !== 'RETURNED_FOR_CORRECTION';
 
   return (
     <div className="space-y-6 p-6">
@@ -668,7 +672,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
         <div className="flex items-center gap-2">
           {isLockedForTeacher && (
             <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-amber-600" /> Read-Only (Submitted to Principal)
+              <Lock className="w-3.5 h-3.5 text-amber-600" /> {(canPublish) ? 'Read-Only (Locked & Saved)' : 'Read-Only (Submitted to Principal)'}
             </span>
           )}
 
@@ -692,7 +696,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
             className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            <span>Submit to Principal</span>
+            <span>{(canPublish) ? 'Submit Class Marks' : 'Submit to Principal'}</span>
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
+import { apiGet, apiPost } from '../../../api/client/apiClient';
 import { Exam, ExamSubject, StudentExamRecord } from '../types';
 
-const API_BASE_URL = '/api/v1/examinations';
+const API_BASE_URL = '/examinations';
 
 type AcademicYear = {
   id: string;
@@ -151,9 +152,8 @@ export const examinationsApi = {
       if (branchId && branchId !== 'ALL') params.append('branch_id', branchId);
       if (status) params.append('status', status);
 
-      const res = await fetch(`${API_BASE_URL}?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch exams');
-      const data = (await res.json()) as ApiExam[];
+      const qs = params.toString();
+      const data = await apiGet<ApiExam[]>(`${API_BASE_URL}${qs ? `?${qs}` : ''}`);
       const mapped = data.map(mapExamFromApi);
       const local = localStorage.getItem('sms_exams_fallback');
       if (mapped.length === 0 && local) return JSON.parse(local) as Exam[];
@@ -167,13 +167,11 @@ export const examinationsApi = {
 
   async createExam(exam: Partial<Exam>, examSubjects: Partial<ExamSubject>[]): Promise<Exam> {
     try {
-      const res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...mapExamToApi(exam), exam_subjects: examSubjects.map(mapExamSubjectToApi) }),
+      const data = await apiPost<ApiExam>(API_BASE_URL, {
+        ...mapExamToApi(exam),
+        exam_subjects: examSubjects.map(mapExamSubjectToApi),
       });
-      if (!res.ok) throw new Error('Failed to create exam');
-      const created = mapExamFromApi((await res.json()) as ApiExam);
+      const created = mapExamFromApi(data);
       localStorage.removeItem('sms_exams_fallback');
       return created;
     } catch (err) {
@@ -198,18 +196,12 @@ export const examinationsApi = {
     excludeExamId?: string;
   }): Promise<{ hasOverlap: boolean; conflictingExamName?: string }> {
     try {
-      const res = await fetch(`${API_BASE_URL}/check-overlap`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exam_date: payload.examDate,
-          target_branch_ids: payload.targetBranchIds,
-          programme_id: payload.programmeId,
-          exclude_exam_id: payload.excludeExamId,
-        }),
+      const data = await apiPost<any>(`${API_BASE_URL}/check-overlap`, {
+        exam_date: payload.examDate,
+        target_branch_ids: payload.targetBranchIds,
+        programme_id: payload.programmeId,
+        exclude_exam_id: payload.excludeExamId,
       });
-      if (!res.ok) throw new Error('Overlap check failed');
-      const data = await res.json();
       return {
         hasOverlap: data.has_overlap,
         conflictingExamName: data.conflicting_exam_name,
@@ -221,40 +213,26 @@ export const examinationsApi = {
   },
 
   async exemptBranch(examId: string, branchId: string, reason: string): Promise<Exam> {
-    const res = await fetch(`${API_BASE_URL}/${examId}/exempt-branch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch_id: branchId, reason }),
-    });
-    if (!res.ok) throw new Error('Exempt branch failed');
-    return await res.json();
+    const data = await apiPost<ApiExam>(`${API_BASE_URL}/${examId}/exempt-branch`, { branch_id: branchId, reason });
+    return mapExamFromApi(data);
   },
 
   async returnForCorrection(examId: string, reason: string): Promise<Exam> {
-    const res = await fetch(`${API_BASE_URL}/${examId}/return`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    });
-    if (!res.ok) throw new Error('Return exam failed');
-    return await res.json();
+    const data = await apiPost<ApiExam>(`${API_BASE_URL}/${examId}/return`, { reason });
+    return mapExamFromApi(data);
   },
 
   async publishExam(examId: string): Promise<Exam> {
-    const res = await fetch(`${API_BASE_URL}/${examId}/publish`, {
-      method: 'POST',
-    });
-    if (!res.ok) throw new Error('Publish exam failed');
-    return await res.json();
+    const data = await apiPost<ApiExam>(`${API_BASE_URL}/${examId}/publish`, {});
+    return mapExamFromApi(data);
   },
 
   async getStudentExamRecords(examId: string, sectionId?: string): Promise<StudentExamRecord[]> {
     try {
       const params = new URLSearchParams();
       if (sectionId) params.append('section_id', sectionId);
-      const res = await fetch(`${API_BASE_URL}/${examId}/records?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch exam records');
-      const data = await res.json();
+      const qs = params.toString();
+      const data = await apiGet<ApiStudentExamRecord[]>(`${API_BASE_URL}/${examId}/records${qs ? `?${qs}` : ''}`);
       return (data || []).map(mapStudentExamRecordFromApi);
     } catch {
       const local = localStorage.getItem(`sms_records_${examId}_${sectionId}`);
@@ -272,17 +250,7 @@ export const examinationsApi = {
         status: r.status || 'DRAFT',
       }));
 
-      const res = await fetch(`${API_BASE_URL}/${examId}/records/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: apiPayload }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`Bulk save failed (${res.status}):`, errText);
-        throw new Error(`Failed to bulk save records: ${res.status} - ${errText}`);
-      }
-      const data = await res.json();
+      const data = await apiPost<ApiStudentExamRecord[]>(`${API_BASE_URL}/${examId}/records/bulk`, { records: apiPayload });
       return (data || []).map(mapStudentExamRecordFromApi);
     } catch (err) {
       console.warn('Bulk save fallback:', err);
@@ -293,9 +261,7 @@ export const examinationsApi = {
   },
   async getExamSubjects(examId: string): Promise<ExamSubject[]> {
     try {
-      const res = await fetch(`${API_BASE_URL}/${examId}/subjects`);
-      if (!res.ok) return [];
-      const data = await res.json();
+      const data = await apiGet<ApiExamSubject[]>(`${API_BASE_URL}/${examId}/subjects`);
       return data.map(mapExamSubjectFromApi);
     } catch {
       return [];
@@ -303,15 +269,15 @@ export const examinationsApi = {
   },
 
   async getAcademicYears(): Promise<AcademicYear[]> {
-    const res = await fetch('/api/v1/academic-structure/academic-years');
-    if (!res.ok) throw new Error('Failed to fetch academic years');
-    return await res.json();
+    try {
+      return await apiGet<AcademicYear[]>('/academic-structure/academic-years');
+    } catch {
+      return [];
+    }
   },
   async getBranches(): Promise<{ id: string; name: string; code: string }[]> {
     try {
-      const res = await fetch('/api/v1/branches');
-      if (!res.ok) throw new Error('Failed to fetch branches');
-      return await res.json();
+      return await apiGet<{ id: string; name: string; code: string }[]>('/branches');
     } catch {
       return [];
     }
@@ -319,9 +285,7 @@ export const examinationsApi = {
 
   async getSubjects(): Promise<{ id: string; code: string; name: string; maxMarks: number; passMarks: number }[]> {
     try {
-      const res = await fetch('/api/v1/academic-structure/subjects');
-      if (!res.ok) throw new Error('Failed to fetch subjects');
-      return await res.json();
+      return await apiGet<{ id: string; code: string; name: string; maxMarks: number; passMarks: number }[]>('/academic-structure/subjects');
     } catch {
       return [];
     }
@@ -329,9 +293,7 @@ export const examinationsApi = {
 
   async getProgrammes(): Promise<{ id: string; code: string; name: string; yearLevel: string; subjectIds?: string[] }[]> {
     try {
-      const res = await fetch('/api/v1/academic-structure/programmes');
-      if (!res.ok) throw new Error('Failed to fetch programmes');
-      return await res.json();
+      return await apiGet<{ id: string; code: string; name: string; yearLevel: string; subjectIds?: string[] }[]>('/academic-structure/programmes');
     } catch {
       return [];
     }
