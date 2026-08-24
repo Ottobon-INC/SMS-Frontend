@@ -51,6 +51,23 @@ const GENDER_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
+function formatProgrammeLabel(programme?: { code?: string; name?: string }): string {
+  if (!programme) {
+    return "";
+  }
+  if (programme.code && programme.name) {
+    return `${programme.code} - ${programme.name}`;
+  }
+  return programme.code || programme.name || "";
+}
+
+function formatBatchLabel(batch?: { code?: string; name?: string }): string {
+  if (!batch) {
+    return "";
+  }
+  return (batch.name || batch.code || "").replace(/\s+\([0-9A-Fa-f]{4}\)$/, "");
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface SectionCardProps {
@@ -364,8 +381,10 @@ export function ManualAddStudentForm() {
         // Resolve display names from already-loaded options
         const branchName = branches?.find((b) => b.id === data.branch_id)?.name;
         const academicYearName = academicYears?.find((y) => y.id === data.academic_year_id)?.name;
-        const programmeName = programmes?.find((p) => p.id === data.programme_id)?.name;
-        const batchName = batches?.find((b) => b.id === data.batch_id)?.name;
+        const programmeName = formatProgrammeLabel(
+          programmes?.find((p) => p.id === data.programme_id)
+        );
+        const batchName = formatBatchLabel(batches?.find((b) => b.id === data.batch_id));
         const sectionName = sections?.find((s) => s.id === data.section_id)?.name;
 
         setSuccessData({
@@ -480,7 +499,7 @@ export function ManualAddStudentForm() {
               <option value="">Select Programme</option>
               {programmes?.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {formatProgrammeLabel(p)}
                 </option>
               ))}
             </SelectField>
@@ -500,7 +519,7 @@ export function ManualAddStudentForm() {
               </option>
               {batches?.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name}
+                  {formatBatchLabel(b)}
                 </option>
               ))}
             </SelectField>

@@ -49,3 +49,25 @@ export interface AcademicYearPayload {
   endsOn: string;
   isDefault: boolean;
 }
+
+export interface AcademicSection {
+  id: string;
+  code: string;
+  name: string;
+  capacity?: number | null;
+  status: string;
+}
+
+export interface AcademicSectionBatch {
+  id: string;
+  code: string;
+  name: string;
+  yearLevel: string;
+  sections: AcademicSection[];
+}
+
+export interface AcademicSectionPayload {
+  batchId: string;
+  section: string;
+  capacity?: number | null;
+}

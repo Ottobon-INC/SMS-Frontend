@@ -2,6 +2,9 @@ import { apiGet, apiPost } from "../../../api/client/apiClient";
 import type {
   AcademicYear,
   AcademicYearPayload,
+  AcademicSection,
+  AcademicSectionBatch,
+  AcademicSectionPayload,
   Programme,
   ProgrammePayload,
   Subject,
@@ -38,5 +41,22 @@ export const academicStructureApi = {
       `/academic-structure/academic-years/${id}/default`,
       {},
     );
+  },
+
+  getSections(params: {
+    branchId: string;
+    academicYearId: string;
+    programmeId: string;
+  }): Promise<AcademicSectionBatch[]> {
+    const query = new URLSearchParams({
+      branch_id: params.branchId,
+      academic_year_id: params.academicYearId,
+      programme_id: params.programmeId,
+    });
+    return apiGet<AcademicSectionBatch[]>(`/academic-structure/sections?${query.toString()}`);
+  },
+
+  createSection(payload: AcademicSectionPayload): Promise<AcademicSection> {
+    return apiPost<AcademicSection>("/academic-structure/sections", payload);
   }
 } as const;

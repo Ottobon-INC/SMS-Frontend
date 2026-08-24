@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BookMarked, BookOpen, CheckCircle2, Layers, RefreshCw, ShieldCheck, X } from "lucide-react";
+import {
+  BookMarked,
+  BookOpen,
+  CheckCircle2,
+  Layers,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { academicStructureApi } from "../api/academicStructureApi";
-import type { AcademicYear, Programme, Subject } from "../types";
+import type { AcademicSectionBatch, AcademicYear, Programme, Subject } from "../types";
 
 interface BranchSummary {
   id: string;
@@ -38,6 +47,16 @@ export function AcademicStructurePage() {
   const [matrixOfferings, setMatrixOfferings] = useState<Record<string, string[]>>({});
   const [selectedMatrixYearId, setSelectedMatrixYearId] = useState<string>("");
   const [isSavingMatrix, setIsSavingMatrix] = useState(false);
+  const [sectionModal, setSectionModal] = useState<{
+    branch: BranchSummary;
+    programme: Programme;
+  } | null>(null);
+  const [sectionBatches, setSectionBatches] = useState<AcademicSectionBatch[]>([]);
+  const [selectedSectionBatchId, setSelectedSectionBatchId] = useState("");
+  const [newSectionSuffix, setNewSectionSuffix] = useState("");
+  const [newSectionCapacity, setNewSectionCapacity] = useState("");
+  const [loadingSections, setLoadingSections] = useState(false);
+  const [isCreatingSection, setIsCreatingSection] = useState(false);
 
   const [yearName, setYearName] = useState("");
   const [yearCode, setYearCode] = useState("");
@@ -127,6 +146,74 @@ export function AcademicStructurePage() {
       setIsSavingMatrix(false);
     }
   };
+
+  async function loadSectionsForOffering(branch: BranchSummary, programme: Programme) {
+    if (!selectedMatrixYearId) {
+      notify("Select an academic year before managing sections.");
+      return;
+    }
+
+    setLoadingSections(true);
+    try {
+      const batches = await academicStructureApi.getSections({
+        branchId: branch.id,
+        academicYearId: selectedMatrixYearId,
+        programmeId: programme.id,
+      });
+      setSectionBatches(batches);
+      setSelectedSectionBatchId((current) => {
+        if (current && batches.some((batch) => batch.id === current)) {
+          return current;
+        }
+        return batches[0]?.id ?? "";
+      });
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to load sections.");
+    } finally {
+      setLoadingSections(false);
+    }
+  }
+
+  async function openSectionManager(branch: BranchSummary, programme: Programme) {
+    setSectionModal({ branch, programme });
+    setNewSectionSuffix("");
+    setNewSectionCapacity("");
+    setSelectedSectionBatchId("");
+    await loadSectionsForOffering(branch, programme);
+  }
+
+  async function handleCreateSection(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sectionModal || !selectedSectionBatchId || !newSectionSuffix.trim()) {
+      return;
+    }
+
+    setIsCreatingSection(true);
+    try {
+      const created = await academicStructureApi.createSection({
+        batchId: selectedSectionBatchId,
+        section: newSectionSuffix.trim().toUpperCase(),
+        capacity: newSectionCapacity ? Number(newSectionCapacity) : null,
+      });
+      setSectionBatches((current) =>
+        current.map((batch) =>
+          batch.id === selectedSectionBatchId
+            ? {
+                ...batch,
+                sections: [...batch.sections, created].sort((a, b) => a.name.localeCompare(b.name)),
+              }
+            : batch,
+        ),
+      );
+      setNewSectionSuffix("");
+      setNewSectionCapacity("");
+      notify(`Section "${created.name}" created.`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to create section.");
+    } finally {
+      setIsCreatingSection(false);
+    }
+  }
 
   const handleYearNameChange = (val: string) => {
     setYearName(val);
@@ -470,9 +557,18 @@ export function AcademicStructurePage() {
                             />
                           </label>
                         ) : isOffered ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
-                            ✓ Offered
-                          </span>
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
+                              ✓ Offered
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void openSectionManager(branch, prog)}
+                              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition"
+                            >
+                              Sections
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-slate-300 font-bold text-xs">—</span>
                         )}
@@ -766,6 +862,148 @@ export function AcademicStructurePage() {
                 </button>
                 <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-xl shadow-xs">
                   Create Course Stream
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {sectionModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Manage Sections</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {sectionModal.programme.code} - {sectionModal.programme.name} at{" "}
+                  {sectionModal.branch.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSectionModal(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 text-xs text-teal-900">
+              Sections are created inside the selected batch. For example, section suffix{" "}
+              <strong>B</strong> creates a clean display section such as{" "}
+              <strong>{sectionModal.programme.code}-B</strong>, while the backend keeps the
+              year-aware section code for safe routing.
+            </div>
+
+            {loadingSections ? (
+              <div className="py-8 text-center text-xs font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-teal-600" /> Loading sections...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {sectionBatches.map((batch) => (
+                  <div key={batch.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-slate-900">{batch.name}</div>
+                        <div className="text-[10px] font-mono text-slate-400">{batch.code}</div>
+                      </div>
+                      <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-600 border border-slate-200">
+                        Year {batch.yearLevel}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {batch.sections.length > 0 ? (
+                        batch.sections.map((section) => (
+                          <span
+                            key={section.id}
+                            className="rounded-lg border border-teal-200 bg-white px-2 py-1 text-[11px] font-bold text-teal-700"
+                            title={section.code}
+                          >
+                            {section.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] font-semibold text-slate-400">
+                          No active sections yet.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {sectionBatches.length === 0 && (
+                  <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800">
+                    No active batches were found. Save the offering matrix once for this stream and
+                    academic year, then add sections.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={(event) => void handleCreateSection(event)} className="border-t border-slate-100 pt-4 space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_120px] gap-3">
+                <label className="block font-bold text-slate-700">
+                  Target Batch *
+                  <select
+                    required
+                    value={selectedSectionBatchId}
+                    onChange={(event) => setSelectedSectionBatchId(event.target.value)}
+                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {sectionBatches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>
+                        {batch.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block font-bold text-slate-700">
+                  Section *
+                  <input
+                    type="text"
+                    required
+                    maxLength={3}
+                    placeholder="B"
+                    value={newSectionSuffix}
+                    onChange={(event) => setNewSectionSuffix(event.target.value.toUpperCase())}
+                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </label>
+                <label className="block font-bold text-slate-700">
+                  Capacity
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Optional"
+                    value={newSectionCapacity}
+                    onChange={(event) => setNewSectionCapacity(event.target.value)}
+                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-3 font-bold">
+                <button
+                  type="button"
+                  onClick={() => setSectionModal(null)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingSection || sectionBatches.length === 0}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isCreatingSection ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" /> Add Section
+                    </>
+                  )}
                 </button>
               </div>
             </form>
