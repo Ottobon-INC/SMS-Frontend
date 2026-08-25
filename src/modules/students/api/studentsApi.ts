@@ -33,6 +33,7 @@ export interface StudentListItem {
   programmeId?: string | null;
   programmeCode?: string | null;
   programmeName?: string | null;
+  programmeDisplay?: string | null;
   streamCode?: string | null;
   coachingTrack?: string | null;
   batchId?: string | null;
@@ -41,7 +42,9 @@ export interface StudentListItem {
   sectionId?: string | null;
   sectionCode?: string | null;
   sectionName?: string | null;
+  sectionDisplay?: string | null;
   yearLevel?: string | null;
+  yearLevelLabel?: string | null;
   enrollmentStatus?: string | null;
   joiningDate?: string | null;
   endingDate?: string | null;

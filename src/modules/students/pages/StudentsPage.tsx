@@ -10,6 +10,7 @@ type StudentColumn = {
   key: string;
   label: string;
   value: (student: StudentListItem) => unknown;
+  editValue?: (student: StudentListItem) => unknown;
   className?: string;
   updateKey?: keyof StudentInlineUpdatePayload;
   inputType?: 'text' | 'date' | 'select';
@@ -26,26 +27,139 @@ function formatCellValue(value: unknown): string {
   return String(value);
 }
 
+function formatDateForDisplay(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  const raw = String(value).slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) {
+    return String(value);
+  }
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function formatDateForEdit(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '';
+  }
+  return String(value).slice(0, 10);
+}
+
+function formatRelationship(value: unknown): string {
+  const raw = formatCellValue(value);
+  if (raw === '-') {
+    return raw;
+  }
+  return raw
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getProgrammeDisplay(student: StudentListItem): string {
+  if (student.programmeDisplay) {
+    return student.programmeDisplay;
+  }
+  if (student.programmeCode && student.programmeName) {
+    return `${student.programmeCode} - ${student.programmeName}`;
+  }
+  return formatCellValue(student.programmeName ?? student.stream);
+}
+
+function getSectionDisplay(student: StudentListItem): string {
+  return formatCellValue(student.sectionDisplay ?? student.sectionName ?? student.section);
+}
+
+function getYearLevelDisplay(student: StudentListItem): string {
+  if (student.yearLevelLabel) {
+    return student.yearLevelLabel;
+  }
+  if (student.yearLevel === '1') {
+    return 'First Year';
+  }
+  if (student.yearLevel === '2') {
+    return 'Second Year';
+  }
+  return formatCellValue(student.yearLevel);
+}
+
 const studentColumns: StudentColumn[] = [
   { key: 'admissionNumber', label: 'Admission No', value: (s) => s.admissionNumber, className: 'font-mono text-teal-700 font-bold' },
   { key: 'studentName', label: 'Student Name', value: (s) => s.displayName ?? s.legalName ?? s.name, className: 'font-bold text-slate-900', updateKey: 'student_name' },
-  { key: 'branchName', label: 'Branch', value: (s) => s.branchName ?? 'N/A' },
   { key: 'gender', label: 'Gender', value: (s) => s.gender, updateKey: 'gender', inputType: 'select', options: ['MALE', 'FEMALE', 'OTHER'] },
-  { key: 'dateOfBirth', label: 'Date Of Birth', value: (s) => s.dateOfBirth ?? s.dob, updateKey: 'date_of_birth', inputType: 'date' },
+  {
+    key: 'dateOfBirth',
+    label: 'Date Of Birth',
+    value: (s) => formatDateForDisplay(s.dateOfBirth ?? s.dob),
+    editValue: (s) => formatDateForEdit(s.dateOfBirth ?? s.dob),
+    updateKey: 'date_of_birth',
+    inputType: 'date',
+  },
   { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
   { key: 'studentEmail', label: 'Student Email', value: (s) => s.studentEmail, updateKey: 'student_email' },
   { key: 'academicYearName', label: 'Academic Year', value: (s) => s.academicYearName },
-  { key: 'programmeName', label: 'Programme / Stream', value: (s) => s.programmeName ?? s.stream },
-  { key: 'sectionName', label: 'Section', value: (s) => s.sectionName ?? s.section },
+  { key: 'yearLevel', label: 'Year Level', value: getYearLevelDisplay },
+  { key: 'programmeName', label: 'Programme / Stream', value: getProgrammeDisplay },
+  { key: 'sectionName', label: 'Section', value: getSectionDisplay },
   { key: 'rollNumber', label: 'Roll No', value: (s) => s.rollNumber ?? s.rollNo, updateKey: 'roll_number' },
-  { key: 'joiningDate', label: 'Joining Date', value: (s) => s.joiningDate, updateKey: 'joining_date', inputType: 'date' },
-  { key: 'endingDate', label: 'Ending Date', value: (s) => s.endingDate, updateKey: 'ending_date', inputType: 'date' },
+  {
+    key: 'joiningDate',
+    label: 'Joining Date',
+    value: (s) => formatDateForDisplay(s.joiningDate),
+    editValue: (s) => formatDateForEdit(s.joiningDate),
+    updateKey: 'joining_date',
+    inputType: 'date',
+  },
+  {
+    key: 'endingDate',
+    label: 'Ending Date',
+    value: (s) => formatDateForDisplay(s.endingDate),
+    editValue: (s) => formatDateForEdit(s.endingDate),
+    updateKey: 'ending_date',
+    inputType: 'date',
+  },
   { key: 'guardianName', label: 'Guardian Name', value: (s) => s.guardianName ?? s.father_name, updateKey: 'guardian_name' },
-  { key: 'guardianRelationship', label: 'Relationship', value: (s) => s.guardianRelationship ?? s.guardian_relationship, updateKey: 'guardian_relationship', inputType: 'select', options: ['FATHER', 'MOTHER', 'LEGAL_GUARDIAN', 'RELATIVE', 'SPONSOR', 'OTHER'] },
+  {
+    key: 'guardianRelationship',
+    label: 'Relationship',
+    value: (s) => formatRelationship(s.guardianRelationship ?? s.guardian_relationship),
+    editValue: (s) => s.guardianRelationship ?? s.guardian_relationship,
+    updateKey: 'guardian_relationship',
+    inputType: 'select',
+    options: ['FATHER', 'MOTHER', 'LEGAL_GUARDIAN', 'RELATIVE', 'SPONSOR', 'OTHER'],
+  },
   { key: 'guardianPhone', label: 'Guardian Phone', value: (s) => s.guardianPhone ?? s.guardian_phone, updateKey: 'guardian_phone' },
   { key: 'guardianEmail', label: 'Guardian Email', value: (s) => s.guardianEmail, updateKey: 'guardian_email' },
-  { key: 'studentCreatedAt', label: 'Student Created', value: (s) => s.studentCreatedAt },
+  { key: 'studentCreatedAt', label: 'Student Created', value: (s) => formatDateForDisplay(s.studentCreatedAt) },
 ];
+
+function getHeaderCellClass(column: StudentColumn): string {
+  const stickyClass =
+    column.key === 'admissionNumber'
+      ? 'sticky left-0 z-20 bg-slate-50'
+      : column.key === 'studentName'
+        ? 'sticky left-[150px] z-20 bg-slate-50'
+        : '';
+  return `py-3.5 px-4 whitespace-nowrap border-r border-slate-200 last:border-r-0 ${stickyClass}`;
+}
+
+function getBodyCellClass(column: StudentColumn): string {
+  const stickyClass =
+    column.key === 'admissionNumber'
+      ? 'sticky left-0 z-10 bg-white group-hover:bg-slate-50'
+      : column.key === 'studentName'
+        ? 'sticky left-[150px] z-10 bg-white group-hover:bg-slate-50'
+        : '';
+  const widthClass =
+    column.key === 'admissionNumber'
+      ? 'min-w-[150px]'
+      : column.key === 'studentName'
+        ? 'min-w-[210px]'
+        : '';
+  return `py-3 px-4 max-w-[260px] whitespace-nowrap border-r border-slate-100 last:border-r-0 ${stickyClass} ${widthClass} ${column.className ?? 'text-slate-600'}`;
+}
 
 const SearchableBranchSelect = ({ 
   branches, 
@@ -250,7 +364,7 @@ export const StudentsPage: React.FC = () => {
     if (draft !== undefined && draft !== null) {
       return String(draft);
     }
-    const currentValue = column.value(student);
+    const currentValue = column.editValue ? column.editValue(student) : column.value(student);
     return currentValue === '-' ? '' : formatCellValue(currentValue);
   };
 
@@ -287,13 +401,17 @@ export const StudentsPage: React.FC = () => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getProgrammeDisplay(s).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getSectionDisplay(s).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formatCellValue(s.rollNumber ?? s.rollNo).toLowerCase().includes(searchQuery.toLowerCase()) ||
       formatCellValue(s.guardianName).toLowerCase().includes(searchQuery.toLowerCase()) ||
       formatCellValue(s.guardianPhone).toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStream =
       streamFilter === 'ALL' ||
       s.stream === streamFilter ||
       s.programmeCode === streamFilter ||
-      s.streamCode === streamFilter;
+      s.streamCode === streamFilter ||
+      getProgrammeDisplay(s).toLowerCase().startsWith(`${streamFilter.toLowerCase()} -`);
     const matchesBranch =
       branchFilter === 'ALL' ||
       branchFilter === 'PENDING' ||
@@ -445,7 +563,9 @@ export const StudentsPage: React.FC = () => {
             >
               <option value="ALL">All Streams</option>
               <option value="MPC">MPC Stream</option>
-              <option value="BiPC">BiPC Stream</option>
+              <option value="BIPC">BiPC Stream</option>
+              <option value="MEC">MEC Stream</option>
+              <option value="CEC">CEC Stream</option>
             </select>
           </div>
 
@@ -486,11 +606,11 @@ export const StudentsPage: React.FC = () => {
       ) : (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="max-h-[64vh] overflow-auto">
-            <table className="min-w-[1800px] w-max text-left text-xs border-collapse">
+            <table className="min-w-[1900px] w-max text-left text-xs border-collapse">
               <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
                 {studentColumns.map((column) => (
-                  <th key={column.key} className="py-3.5 px-4 whitespace-nowrap border-r border-slate-200 last:border-r-0">
+                  <th key={column.key} className={getHeaderCellClass(column)}>
                     {column.label}
                   </th>
                 ))}
@@ -498,11 +618,11 @@ export const StudentsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {paginatedStudents.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50/80 transition">
+                <tr key={s.id} className="group hover:bg-slate-50/80 transition">
                   {studentColumns.map((column) => (
                     <td
                       key={`${s.id}-${column.key}`}
-                      className={`py-3 px-4 max-w-[240px] whitespace-nowrap border-r border-slate-100 last:border-r-0 ${column.className ?? 'text-slate-600'}`}
+                      className={getBodyCellClass(column)}
                       title={formatCellValue(column.value(s))}
                     >
                       {editMode && column.updateKey != null ? (
