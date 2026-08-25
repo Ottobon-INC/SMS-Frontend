@@ -43,6 +43,46 @@ function ledgerTypeLabel(entryType: string): string {
   return entryType.replaceAll("_", " ");
 }
 
+function formatCell(value: string | null | undefined): string {
+  if (value == null || value === "") {
+    return "-";
+  }
+  return value;
+}
+
+function programmeDisplay(
+  item: Pick<FeeAccountListItem | FeeEnrollmentOption, "programme_code" | "programme_name" | "programme_display">
+): string {
+  if (item.programme_display) {
+    return item.programme_display;
+  }
+  if (item.programme_code && item.programme_name) {
+    return `${item.programme_code} - ${item.programme_name}`;
+  }
+  return formatCell(item.programme_name ?? item.programme_code);
+}
+
+function sectionDisplay(
+  item: Pick<FeeAccountListItem | FeeEnrollmentOption, "section_name" | "section_display">
+): string {
+  return formatCell(item.section_display ?? item.section_name);
+}
+
+function yearLevelDisplay(
+  item: Pick<FeeAccountListItem | FeeEnrollmentOption, "year_level" | "year_level_label">
+): string {
+  if (item.year_level_label) {
+    return item.year_level_label;
+  }
+  if (item.year_level === "1") {
+    return "First Year";
+  }
+  if (item.year_level === "2") {
+    return "Second Year";
+  }
+  return formatCell(item.year_level);
+}
+
 export function FeesPage() {
   const auth = useAuth();
   const [accounts, setAccounts] = useState<FeeAccountListItem[]>([]);
@@ -279,7 +319,11 @@ export function FeesPage() {
         account.student_name,
         account.branch_name,
         account.academic_year,
+        account.year_level_label,
+        account.programme_code,
+        account.programme_display,
         account.programme_name,
+        account.section_display,
         account.section_name,
         account.status
       ]
@@ -390,7 +434,8 @@ export function FeesPage() {
                   <th className="border-b border-slate-200 px-4 py-3">Admission No</th>
                   <th className="border-b border-slate-200 px-4 py-3">Student</th>
                   <th className="border-b border-slate-200 px-4 py-3">Academic Year</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Programme</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Year Level</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Programme / Stream</th>
                   <th className="border-b border-slate-200 px-4 py-3">Section</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Assigned</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Scholarship</th>
@@ -409,8 +454,9 @@ export function FeesPage() {
                     <td className="px-4 py-3 font-mono font-bold text-teal-700">{account.admission_number ?? "-"}</td>
                     <td className="px-4 py-3 font-bold text-slate-950">{account.student_name}</td>
                     <td className="px-4 py-3 text-slate-700">{account.academic_year ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-700">{account.programme_name ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-700">{account.section_name ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-700">{yearLevelDisplay(account)}</td>
+                    <td className="px-4 py-3 text-slate-700">{programmeDisplay(account)}</td>
+                    <td className="px-4 py-3 text-slate-700">{sectionDisplay(account)}</td>
                     <td className="px-4 py-3 text-right font-mono">{money(account.assigned_fee_amount)}</td>
                     <td className="px-4 py-3 text-right font-mono">{money(account.scholarship_amount)}</td>
                     <td className="px-4 py-3 text-right font-mono">{money(account.concession_amount)}</td>
@@ -504,8 +550,9 @@ export function FeesPage() {
                     {setupOptions.map((option) => (
                       <option key={option.enrollment_id} value={option.enrollment_id}>
                         {option.student_name} - {option.admission_number ?? "No Admission No"} - {option.academic_year}
-                        {option.programme_name ? ` - ${option.programme_name}` : ""}
-                        {option.section_name ? ` - ${option.section_name}` : ""}
+                        {option.year_level_label ? ` - ${option.year_level_label}` : ""}
+                        {` - ${programmeDisplay(option)}`}
+                        {` - ${sectionDisplay(option)}`}
                       </option>
                     ))}
                   </select>

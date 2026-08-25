@@ -9,8 +9,13 @@ export interface FeeAccountListItem {
   student_name: string;
   branch_name: string | null;
   academic_year: string | null;
+  year_level?: string | null;
+  year_level_label?: string | null;
+  programme_code?: string | null;
   programme_name: string | null;
+  programme_display?: string | null;
   section_name: string | null;
+  section_display?: string | null;
   currency: string;
   assigned_fee_amount: string;
   scholarship_amount: string;
@@ -33,8 +38,13 @@ export interface FeeEnrollmentOption {
   student_name: string;
   branch_name: string;
   academic_year: string;
+  year_level?: string | null;
+  year_level_label?: string | null;
+  programme_code?: string | null;
   programme_name: string | null;
+  programme_display?: string | null;
   section_name: string | null;
+  section_display?: string | null;
 }
 
 export interface FeeAccountCreatePayload {

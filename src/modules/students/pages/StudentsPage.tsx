@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Search, Filter, CheckCircle2, X, RefreshCw, GraduationCap, AlertCircle, Edit3, Save, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStudents, STUDENT_KEYS } from '../hooks/useStudents';
@@ -232,6 +233,7 @@ const SearchableBranchSelect = ({
 };
 
 export const StudentsPage: React.FC = () => {
+  const navigate = useNavigate();
   const auth = useAuth();
   const queryClient = useQueryClient();
   const isTenantLevel = !auth.activeContext?.branch_id;
@@ -514,10 +516,7 @@ export const StudentsPage: React.FC = () => {
             )
           )}
           <button
-            onClick={() => {
-              resetForm();
-              setShowAddModal(true);
-            }}
+            onClick={() => navigate('/imports/manual')}
             className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
           >
             <UserPlus className="w-4 h-4" /> Enroll New Student
