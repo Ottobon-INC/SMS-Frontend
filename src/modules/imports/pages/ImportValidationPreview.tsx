@@ -101,6 +101,9 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
   const auth = useAuth();
+  const importKindLabel = importType === "fees" ? "Fee Import" : "Student Import";
+  const importActionLabel = importType === "fees" ? "Import Fee Accounts" : "Import Students";
+  const importBackPath = importType === "fees" ? "/imports/fees" : "/imports";
 
   const [data, setData] = useState<PreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -171,31 +174,8 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
     setEditedRow((current) => ({ ...current, [column]: value }));
   };
 
-  const saveEditedRow = async () => {
-    if (!batchId || !editingRowId) return;
-    setIsSavingRow(true);
-    try {
-      const correctedPreview =
-        importType === "fees"
-          ? await importsApi.correctFeePreviewRow(batchId, editingRowId, editedRow)
-          : await importsApi.correctPreviewRow(batchId, editingRowId, editedRow);
-      setData(correctedPreview);
-      setEditingRowId(null);
-      setEditedRow({});
-      setError(null);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to save row correction."));
-    } finally {
-      setIsSavingRow(false);
-    }
-  };
-
   const applyEditedRow = () => {
     if (!editingRowId) return;
-    if (importType === "fees") {
-      void saveEditedRow();
-      return;
-    }
 
     setPendingRowEdits((current) => ({
       ...current,
@@ -216,7 +196,10 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
 
     setIsSavingRow(true);
     try {
-      const correctedPreview = await importsApi.correctPreviewRows(batchId, rowsToSave);
+      const correctedPreview =
+        importType === "fees"
+          ? await importsApi.correctFeePreviewRows(batchId, rowsToSave)
+          : await importsApi.correctPreviewRows(batchId, rowsToSave);
       setData(correctedPreview);
       setPendingRowEdits({});
       setEditingRowId(null);
@@ -250,10 +233,10 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
               <h2 className="text-sm font-bold text-red-900">Preview Error</h2>
               <p className="text-sm text-red-700 mt-1">{error || "Preview data not available"}</p>
               <button
-                onClick={() => navigate("/imports")}
+                onClick={() => navigate(importBackPath)}
                 className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-700 text-sm font-semibold rounded-xl hover:bg-red-50 transition-all"
               >
-                Back to Student Import
+                Back to {importKindLabel}
               </button>
             </div>
           </div>
@@ -288,7 +271,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
             </p>
           </div>
           <div className="flex gap-3">
-            {importType === "students" && hasPendingEdits && (
+            {hasPendingEdits && (
               <button
                 onClick={saveAllEditedRows}
                 disabled={isSavingRow || isCommitting}
@@ -303,7 +286,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
               </button>
             )}
             <button
-              onClick={() => navigate("/imports")}
+              onClick={() => navigate(importBackPath)}
               disabled={isCommitting}
               className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-sm font-semibold transition-all"
             >
@@ -462,7 +445,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                               ) : (
                                 <Save className="w-3.5 h-3.5" />
                               )}
-                              {importType === "students" ? "Apply" : "Save"}
+                              Apply
                             </button>
                             <button
                               type="button"
@@ -591,7 +574,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">Confirm Student Import</h3>
+              <h3 className="text-base font-bold text-slate-900">Confirm {importKindLabel}</h3>
               <button onClick={() => setShowCommitModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
@@ -629,7 +612,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                   onClick={handleCommit}
                   className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all"
                 >
-                  Import Students
+                  {importActionLabel}
                 </button>
               </div>
             </div>

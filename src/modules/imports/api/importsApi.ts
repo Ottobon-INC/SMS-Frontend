@@ -125,6 +125,10 @@ export const importsApi = {
   getFeePreview: (batchId: string) => apiGet<PreviewResponse>(`/imports/fees/batches/${batchId}/preview`),
   correctFeePreviewRow: (batchId: string, rowId: string, rawData: Record<string, unknown>) =>
     apiPatch<PreviewResponse>(`/imports/fees/batches/${batchId}/rows/${rowId}`, { raw_data: rawData }),
+  correctFeePreviewRows: (
+    batchId: string,
+    rows: Array<{ row_id: string; raw_data: Record<string, unknown> }>
+  ) => apiPatch<PreviewResponse>(`/imports/fees/batches/${batchId}/rows`, { rows }),
   commitFeeBatch: (batchId: string) =>
     apiPost<CommitBatchResponse>(`/imports/fees/batches/${batchId}/commit`, {})
 };
