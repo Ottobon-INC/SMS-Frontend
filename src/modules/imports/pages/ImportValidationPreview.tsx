@@ -46,6 +46,8 @@ const studentPreviewColumns = [
   "Student Email",
   "Academic Year",
   "Programme / Stream",
+  "Year Level",
+  "Batch",
   "Section",
   "Roll No",
   "Joining Date",
