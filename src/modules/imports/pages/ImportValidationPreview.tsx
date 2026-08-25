@@ -37,6 +37,27 @@ function getEditableValue(value: unknown): string {
   return "";
 }
 
+function normalizeFieldLabel(value?: string): string {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+const columnIssueAliases: Record<string, string[]> = {
+  "Admission No": ["Admission Number"],
+  "Student Name": ["Student Full Name"],
+  "Date Of Birth": ["Date of Birth"],
+  "Guardian Phone": ["Guardian Mobile"],
+  Relationship: ["Guardian Relationship"],
+  "Roll No": ["Roll Number"],
+};
+
+function issueMatchesColumn(issueField: string | undefined, column: string): boolean {
+  const normalizedField = normalizeFieldLabel(issueField);
+  if (!normalizedField) return false;
+  return [column, ...(columnIssueAliases[column] ?? [])].some(
+    (alias) => normalizeFieldLabel(alias) === normalizedField
+  );
+}
+
 const studentPreviewColumns = [
   "Admission No",
   "Student Name",
@@ -90,8 +111,8 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   // Row Editing
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editedRow, setEditedRow] = useState<Record<string, unknown>>({});
+  const [pendingRowEdits, setPendingRowEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [isSavingRow, setIsSavingRow] = useState(false);
-  const [showEditConfirm, setShowEditConfirm] = useState(false);
 
   // Commit Modal
   const [showCommitModal, setShowCommitModal] = useState(false);
@@ -108,6 +129,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
       const res =
         importType === "fees" ? await importsApi.getFeePreview(id) : await importsApi.getPreview(id);
       setData(res);
+      setPendingRowEdits({});
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load preview data"));
     } finally {
@@ -137,13 +159,12 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   const startEditingRow = (row: ImportRowResult) => {
     setError(null);
     setEditingRowId(row.id);
-    setEditedRow({ ...row.raw_data });
+    setEditedRow({ ...(pendingRowEdits[row.id] ?? row.raw_data) });
   };
 
   const cancelEditingRow = () => {
     setEditingRowId(null);
     setEditedRow({});
-    setShowEditConfirm(false);
   };
 
   const updateEditedCell = (column: string, value: string) => {
@@ -152,7 +173,6 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
 
   const saveEditedRow = async () => {
     if (!batchId || !editingRowId) return;
-    setShowEditConfirm(false);
     setIsSavingRow(true);
     try {
       const correctedPreview =
@@ -165,6 +185,45 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
       setError(null);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to save row correction."));
+    } finally {
+      setIsSavingRow(false);
+    }
+  };
+
+  const applyEditedRow = () => {
+    if (!editingRowId) return;
+    if (importType === "fees") {
+      void saveEditedRow();
+      return;
+    }
+
+    setPendingRowEdits((current) => ({
+      ...current,
+      [editingRowId]: editedRow,
+    }));
+    setEditingRowId(null);
+    setEditedRow({});
+    setError(null);
+  };
+
+  const saveAllEditedRows = async () => {
+    if (!batchId) return;
+    const rowsToSave = Object.entries(pendingRowEdits).map(([rowId, rawData]) => ({
+      row_id: rowId,
+      raw_data: rawData,
+    }));
+    if (rowsToSave.length === 0) return;
+
+    setIsSavingRow(true);
+    try {
+      const correctedPreview = await importsApi.correctPreviewRows(batchId, rowsToSave);
+      setData(correctedPreview);
+      setPendingRowEdits({});
+      setEditingRowId(null);
+      setEditedRow({});
+      setError(null);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to save row corrections."));
     } finally {
       setIsSavingRow(false);
     }
@@ -214,6 +273,8 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   const hasCommitPermission = auth.hasPermission("import.commit");
   const previewColumns = importType === "fees" ? feePreviewColumns : studentPreviewColumns;
   const importSubject = importType === "fees" ? "fee accounts" : "student records";
+  const pendingEditCount = Object.keys(pendingRowEdits).length;
+  const hasPendingEdits = pendingEditCount > 0;
 
   return (
     <div className="min-h-full bg-slate-50 pb-20">
@@ -227,6 +288,20 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
             </p>
           </div>
           <div className="flex gap-3">
+            {importType === "students" && hasPendingEdits && (
+              <button
+                onClick={saveAllEditedRows}
+                disabled={isSavingRow || isCommitting}
+                className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:hover:bg-amber-500 shadow-sm"
+              >
+                {isSavingRow ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save All Edits ({pendingEditCount})
+              </button>
+            )}
             <button
               onClick={() => navigate("/imports")}
               disabled={isCommitting}
@@ -236,9 +311,15 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
             </button>
             <button
               onClick={() => setShowCommitModal(true)}
-              disabled={hasRejected || isCommitting || !hasCommitPermission}
+              disabled={hasRejected || hasPendingEdits || isCommitting || !hasCommitPermission}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 shadow-sm"
-              title={!hasCommitPermission ? "You do not have import.commit permission." : undefined}
+              title={
+                !hasCommitPermission
+                  ? "You do not have import.commit permission."
+                  : hasPendingEdits
+                    ? "Save all edited rows before importing."
+                    : undefined
+              }
             >
               {isCommitting ? (
                 <>
@@ -276,6 +357,19 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
             <div>
               <h4 className="text-sm font-bold text-red-900">Failed to Finalize</h4>
               <p className="text-sm text-red-700 mt-0.5">{actionError}</p>
+            </div>
+          </div>
+        )}
+
+        {hasPendingEdits && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">Pending Row Edits</h4>
+              <p className="text-sm text-amber-800 mt-0.5">
+                {pendingEditCount} edited row(s) are staged locally. Click{" "}
+                <span className="font-semibold">Save All Edits</span> to revalidate them before importing.
+              </p>
             </div>
           </div>
         )}
@@ -343,18 +437,23 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                   const isWarning = row.validation_status === "WARNING";
                   const isValid = row.validation_status === "VALID";
                   const isEditing = editingRowId === row.id;
+                  const stagedRawData = pendingRowEdits[row.id];
+                  const hasPendingEdit = !!stagedRawData;
+                  const displayRawData = stagedRawData ?? row.raw_data;
 
                   return (
                     <tr
                       key={row.id}
-                      className={`transition-colors ${isRejected ? "bg-red-50/30" : "hover:bg-slate-50/50"}`}
+                      className={`transition-colors ${
+                        hasPendingEdit ? "bg-amber-50/40" : isRejected ? "bg-red-50/30" : "hover:bg-slate-50/50"
+                      }`}
                     >
                       <td className="px-5 py-3 align-top">
                         {isEditing ? (
                           <div className="flex gap-2">
                             <button
                               type="button"
-                              onClick={() => setShowEditConfirm(true)}
+                              onClick={applyEditedRow}
                               disabled={isSavingRow}
                               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm"
                             >
@@ -363,7 +462,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                               ) : (
                                 <Save className="w-3.5 h-3.5" />
                               )}
-                              Save
+                              {importType === "students" ? "Apply" : "Save"}
                             </button>
                             <button
                               type="button"
@@ -387,28 +486,39 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                       </td>
                       <td className="px-5 py-3 text-slate-500 font-medium">{row.row_number}</td>
                       <td className="px-5 py-3">
-                        {isValid && (
+                        {hasPendingEdit && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100/60 border border-amber-200 text-amber-800">
+                            Edited
+                          </span>
+                        )}
+                        {!hasPendingEdit && isValid && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100/50 border border-emerald-200 text-emerald-700">
                             Valid
                           </span>
                         )}
-                        {isWarning && (
+                        {!hasPendingEdit && isWarning && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100/50 border border-amber-200 text-amber-700">
                             Warning
                           </span>
                         )}
-                        {isRejected && (
+                        {!hasPendingEdit && isRejected && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100/50 border border-red-200 text-red-700">
                             Rejected
                           </span>
                         )}
                       </td>
                       {previewColumns.map((col) => {
-                        const colError = row.errors?.find((err) => err.field === col);
-                        const hasError = !!colError;
+                        const colError = row.errors?.find((err) => issueMatchesColumn(err.field, col));
+                        const hasError = !!colError && !hasPendingEdit;
+                        const issueCellClass =
+                          hasError && !isEditing
+                            ? isWarning && !isRejected
+                              ? "bg-amber-50/70"
+                              : "bg-red-50/60"
+                            : "";
 
                         return (
-                          <td key={col} className={`px-5 py-3 text-slate-600 align-top transition-colors ${hasError && !isEditing ? "bg-red-50/60" : ""}`}>
+                          <td key={col} className={`px-5 py-3 text-slate-600 align-top transition-colors ${issueCellClass}`}>
                             {isEditing ? (
                               <input
                                 value={getEditableValue(editedRow[col])}
@@ -417,7 +527,9 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                                 title={colError?.message}
                                 className={`w-48 rounded-md border px-2.5 py-1.5 text-xs outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 transition-all ${
                                   hasError 
-                                    ? "bg-red-50/80 border-red-300 text-red-900 focus:border-red-500 focus:ring-red-200"
+                                    ? isWarning && !isRejected
+                                      ? "bg-amber-50/80 border-amber-300 text-amber-900 focus:border-amber-500 focus:ring-amber-200"
+                                      : "bg-red-50/80 border-red-300 text-red-900 focus:border-red-500 focus:ring-red-200"
                                     : "bg-white border-transparent hover:border-slate-300 focus:border-slate-900 focus:ring-slate-200 text-slate-900 shadow-[0_0_0_1px_rgba(0,0,0,0.05)]"
                                 }`}
                               />
@@ -426,16 +538,26 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                                 title={colError?.message}
                                 className={`inline-block ${
                                   col === "Student Name" ? "font-bold text-slate-900" : ""
-                                } ${hasError ? "text-red-700 font-medium" : ""}`}
+                                } ${
+                                  hasError
+                                    ? isWarning && !isRejected
+                                      ? "text-amber-700 font-medium"
+                                      : "text-red-700 font-medium"
+                                    : ""
+                                }`}
                               >
-                                {getDisplayValue(row.raw_data[col])}
+                                {getDisplayValue(displayRawData[col])}
                               </span>
                             )}
                           </td>
                         );
                       })}
                       <td className="px-5 py-3 text-slate-600 min-w-[320px] whitespace-normal">
-                        {row.errors && row.errors.length > 0 ? (
+                        {hasPendingEdit ? (
+                          <span className="text-amber-700 text-xs font-semibold">
+                            Pending revalidation. Click Save All Edits.
+                          </span>
+                        ) : row.errors && row.errors.length > 0 ? (
                           <ul className="flex flex-col gap-1.5">
                             {row.errors.map((err, i) => (
                               <li
@@ -515,31 +637,6 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
         </div>
       )}
 
-      {/* Row Edit Confirm Modal */}
-      {showEditConfirm && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-base font-bold text-slate-900 mb-2">Save Row Correction?</h3>
-            <p className="text-sm text-slate-500 mb-6">
-              The preview will be revalidated against your corrected data.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowEditConfirm(false)}
-                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEditedRow}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-sm"
-              >
-                Save & Validate
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
