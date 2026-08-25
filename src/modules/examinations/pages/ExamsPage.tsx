@@ -147,23 +147,24 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   const [subjectConfigs, setSubjectConfigs] = useState<Record<string, { maxMarks: number; passMarks: number }>>({});
   const [optedOutSubjectIds, setOptedOutSubjectIds] = useState<string[]>([]);
 
-  // Dynamically re-filter available programmes based on selected audience scope & branches
+  // Dynamically re-filter available programmes based on selected audience scope, branches & academic year
   useEffect(() => {
     let fetchPromises: Promise<Programme[]>[];
+    const ayParam = academicYearId ? `?academic_year_id=${academicYearId}` : '';
 
     if (examScope === 'ALL_BRANCHES') {
       fetchPromises = [
-        fetch('/api/v1/branches/ALL/programmes').then((res) => (res.ok ? res.json() : [])),
+        fetch(`/api/v1/branches/ALL/programmes${ayParam}`).then((res) => (res.ok ? res.json() : [])),
       ];
     } else if (examScope === 'SELECTED_BRANCHES') {
       if (selectedBranchIds.length === 0) return;
       fetchPromises = selectedBranchIds.map((bId) =>
-        fetch(`/api/v1/branches/${bId}/programmes`).then((res) => (res.ok ? res.json() : []))
+        fetch(`/api/v1/branches/${bId}/programmes${ayParam}`).then((res) => (res.ok ? res.json() : []))
       );
     } else {
       if (!selectedBranchId) return;
       fetchPromises = [
-        fetch(`/api/v1/branches/${selectedBranchId}/programmes`).then((res) => (res.ok ? res.json() : [])),
+        fetch(`/api/v1/branches/${selectedBranchId}/programmes${ayParam}`).then((res) => (res.ok ? res.json() : [])),
       ];
     }
 
@@ -172,8 +173,12 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         const combined = results.flat();
         const uniqueProgsMap = new Map<string, Programme>();
         combined.forEach((p) => {
-          if (p && p.id && !uniqueProgsMap.has(p.id)) {
-            uniqueProgsMap.set(p.id, p);
+          if (p && (p.code || p.id)) {
+            const yl = p.yearLevel || (p as any).year_level || (p as any).yearLevel || 'First Year';
+            const key = `${p.code || p.name}-${yl}`;
+            if (!uniqueProgsMap.has(key)) {
+              uniqueProgsMap.set(key, { ...p, id: key, yearLevel: yl });
+            }
           }
         });
         const branchProgs = Array.from(uniqueProgsMap.values());
@@ -182,12 +187,12 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
           setProgrammes(branchProgs);
           setSelectedProgrammeIds((prev) => {
             const valid = prev.filter((id) => branchProgs.some((bp) => bp.id === id));
-            return valid.length > 0 ? valid : branchProgs.map((bp) => bp.id);
+            return valid.length > 0 ? valid : [branchProgs[0].id];
           });
         }
       })
       .catch((err) => console.error('Failed to load branch-scoped programmes:', err));
-  }, [examScope, selectedBranchId, selectedBranchIds]);
+  }, [examScope, selectedBranchId, selectedBranchIds, academicYearId]);
 
   // Simulated Dean role
   const canPublishOrDean = true;
@@ -284,6 +289,22 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         };
       });
 
+      // Resolve valid UUID strings for backend Pydantic payload validation (prefer specific batchId over master programmeId)
+      const validProgrammeUUIDs = Array.from(
+        new Set(
+          selectedProgrammeIds
+            .map((selId) => {
+              const progObj = programmes.find((p) => p.id === selId || (p as any).key === selId);
+              const candidate = (progObj as any)?.batchId || (progObj as any)?.programmeId || (progObj?.id && progObj.id.length === 36 ? progObj.id : undefined);
+              return typeof candidate === 'string' && candidate.length > 20 && candidate.includes('-') ? candidate : undefined;
+            })
+            .filter((val): val is string => Boolean(val))
+        )
+      );
+
+      const defaultFallbackUuid = (programmes[0] as any)?.batchId || (programmes[0] as any)?.programmeId || '55555555-5555-5555-5555-555555555555';
+      const targetProgrammeId = validProgrammeUUIDs[0] || (defaultFallbackUuid.length > 20 ? defaultFallbackUuid : '55555555-5555-5555-5555-555555555555');
+
       const newExamPayload: Partial<Exam> = {
         name: examName.trim(),
         type: examType,
@@ -291,20 +312,24 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         branchId: examScope === 'SINGLE_BRANCH' ? selectedBranchId : undefined,
         branchIds: targetBranchIds,
         academicYearId,
-        programmeId: selectedProgrammeIds[0] || 'prog-mpc',
-        programmeIds: selectedProgrammeIds,
+        programmeId: targetProgrammeId,
+        programmeIds: validProgrammeUUIDs.length > 0 ? validProgrammeUUIDs : [targetProgrammeId],
         examDate: examDate,
         marksEntryDeadline: '2026-08-25',
         status: 'DRAFT',
       };
 
-      await examinationsApi.createExam(newExamPayload, examSubjects);
+      const createdExam = await examinationsApi.createExam(newExamPayload, examSubjects);
       setExamName('');
       setShowCreateExamModal(false);
-      loadExams();
+      await loadExams();
 
       setNotification(`New assessment "${newExamPayload.name}" created! Staff can now enter class subject marks.`);
       setTimeout(() => setNotification(null), 5000);
+
+      if (createdExam && createdExam.id && onNavigateToMarksEntry) {
+        onNavigateToMarksEntry(createdExam.id);
+      }
     } catch (err) {
       setOverlapError(err instanceof Error ? err.message : 'Failed to create assessment.');
     } finally {
@@ -428,7 +453,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
             {onNavigateToMarksEntry && (
               <button
-                onClick={() => onNavigateToMarksEntry()}
+                onClick={() => onNavigateToMarksEntry(exams.length > 0 ? exams[0].id : undefined)}
                 className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
               >
                 <GraduationCap className="w-4 h-4 text-teal-400" /> Enter Class Marks
@@ -710,11 +735,20 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                 )}
               </div>
 
-              {/* Course Streams Multi-Select */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <label className="block font-bold text-slate-700">Target Course Streams (Multi-Stream Assessment)</label>
-                <p className="text-[11px] text-slate-500">Select streams taking this assessment. Shared subjects will aggregate automatically.</p>
-                <div className="flex flex-wrap gap-2">
+              {/* Target Student Batches Multi-Select */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <label className="block font-bold text-slate-800 text-xs">Target Student Batches (Multi-Batch Assessment)</label>
+                  {selectedProgrammeIds.length > 0 && (
+                    <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-[10px] font-bold">
+                      {selectedProgrammeIds.length} Batch{selectedProgrammeIds.length > 1 ? "es" : ""} Selected
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  Select target student batches taking this assessment. All classroom sections (e.g. Section MPC-1A, MPC-1B) under selected batches will be automatically included.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
                   {programmes.map((prog) => {
                     const isSelected = selectedProgrammeIds.includes(prog.id);
                     return (
@@ -722,14 +756,17 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                         key={prog.id}
                         type="button"
                         onClick={() => handleProgrammeToggle(prog.id)}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer ${
+                        className={`px-3 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs ring-2 ring-teal-300'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs'
                         }`}
                       >
+                        <span className="text-sm">📦</span>
                         <span>{prog.code}</span>
-                        <span className="text-[10px] opacity-80 font-normal">({prog.yearLevel})</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${isSelected ? 'bg-teal-700/50 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          {prog.yearLevel || '1st Year'}
+                        </span>
                       </button>
                     );
                   })}

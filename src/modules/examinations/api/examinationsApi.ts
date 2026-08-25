@@ -147,46 +147,22 @@ function mapExamToApi(exam: Partial<Exam>) {
 
 export const examinationsApi = {
   async getExams(branchId?: string, status?: string): Promise<Exam[]> {
-    try {
-      const params = new URLSearchParams();
-      if (branchId && branchId !== 'ALL') params.append('branch_id', branchId);
-      if (status) params.append('status', status);
+    const params = new URLSearchParams();
+    if (branchId && branchId !== 'ALL') params.append('branch_id', branchId);
+    if (status) params.append('status', status);
 
-      const qs = params.toString();
-      const data = await apiGet<ApiExam[]>(`${API_BASE_URL}${qs ? `?${qs}` : ''}`);
-      const mapped = data.map(mapExamFromApi);
-      const local = localStorage.getItem('sms_exams_fallback');
-      if (mapped.length === 0 && local) return JSON.parse(local) as Exam[];
-      return mapped;
-    } catch (err) {
-      console.warn('API connection failed, using local storage fallback:', err);
-      const local = localStorage.getItem('sms_exams_fallback');
-      return local ? JSON.parse(local) : [];
-    }
+    const qs = params.toString();
+    const data = await apiGet<ApiExam[]>(`${API_BASE_URL}${qs ? `?${qs}` : ''}`);
+    return data.map(mapExamFromApi);
   },
 
   async createExam(exam: Partial<Exam>, examSubjects: Partial<ExamSubject>[]): Promise<Exam> {
-    try {
-      const data = await apiPost<ApiExam>(API_BASE_URL, {
-        ...mapExamToApi(exam),
-        exam_subjects: examSubjects.map(mapExamSubjectToApi),
-      });
-      const created = mapExamFromApi(data);
-      localStorage.removeItem('sms_exams_fallback');
-      return created;
-    } catch (err) {
-      console.warn('API creation failed, saving locally:', err);
-      const newExam = {
-        ...exam,
-        id: `exam-${Date.now()}`,
-        status: 'DRAFT',
-        createdAt: new Date().toISOString(),
-      } as Exam;
-      const existing = await this.getExams();
-      const updated = [newExam, ...existing];
-      localStorage.setItem('sms_exams_fallback', JSON.stringify(updated));
-      return newExam;
-    }
+    const data = await apiPost<ApiExam>(API_BASE_URL, {
+      ...mapExamToApi(exam),
+      exam_subjects: examSubjects.map(mapExamSubjectToApi),
+    });
+    localStorage.removeItem('sms_exams_fallback');
+    return mapExamFromApi(data);
   },
 
   async checkOverlap(payload: {
