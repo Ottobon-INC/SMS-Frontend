@@ -6,6 +6,7 @@ import type {
   AttendanceSessionListItem,
   LookupItem,
   ProgrammeLookup,
+  SectionAttendanceStatus,
 } from "../types/attendance.types";
 
 export const attendanceApi = {
@@ -32,6 +33,9 @@ export const attendanceApi = {
 
   returnSession: (sessionId: string, payload: { reason?: string }) =>
     apiPost<AttendanceSessionResponse>(`/attendance/sessions/${sessionId}/return`, payload),
+
+  getSectionsStatus: (date: string, batchId: string) =>
+    apiGet<SectionAttendanceStatus[]>(`/attendance/sections-status?date=${date}&batchId=${batchId}`),
 
   // --- Academic Lookups (proxying existing backend endpoints) ---
   getBranches: () =>

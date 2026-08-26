@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AttendanceContextSelector } from "../components/AttendanceContextSelector";
+import { useSessionStorage } from "../../../hooks/useSessionStorage";
+import { AttendanceClassGrid } from "../components/AttendanceClassGrid";
 import { PrincipalInbox } from "../components/PrincipalInbox";
 import { DeanOverview } from "../components/DeanOverview";
 import { OfficeStaffRecentSessions } from "../components/OfficeStaffRecentSessions";
@@ -10,12 +11,11 @@ import { useAuth } from "../../authentication/providers/AuthProvider";
 
 export const AttendanceLandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedBranch, setSelectedBranch] = useState("");
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
-  const [selectedProgramme, setSelectedProgramme] = useState("");
-  const [selectedBatch, setSelectedBatch] = useState("");
-  const [selectedSection, setSelectedSection] = useState("");
-  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [selectedBranch, setSelectedBranch] = useSessionStorage("attendance_selectedBranch", "");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useSessionStorage("attendance_selectedAcademicYear", "");
+  const [selectedProgramme, setSelectedProgramme] = useSessionStorage("attendance_selectedProgramme", "");
+  const [selectedBatch, setSelectedBatch] = useSessionStorage("attendance_selectedBatch", "");
+  const [attendanceDate, setAttendanceDate] = useSessionStorage("attendance_attendanceDate", () => new Date().toISOString().split("T")[0]);
   const [error, setError] = useState<string | null>(null);
 
   const auth = useAuth();
@@ -28,10 +28,10 @@ export const AttendanceLandingPage: React.FC = () => {
 
   const createSessionMutation = useCreateAttendanceSession();
 
-  const handleLoadAttendance = () => {
+  const handleLoadAttendance = (sectionId: string) => {
     setError(null);
     createSessionMutation.mutate(
-      { sectionId: selectedSection, attendanceDate },
+      { sectionId, attendanceDate },
       {
         onSuccess: (session) => {
           navigate(`/attendance/session/${session.id}`);
@@ -108,7 +108,7 @@ export const AttendanceLandingPage: React.FC = () => {
           <DeanOverview />
         ) : (
           <div className="flex flex-col gap-4">
-            <AttendanceContextSelector
+            <AttendanceClassGrid
               selectedBranch={selectedBranch}
               setSelectedBranch={setSelectedBranch}
               selectedAcademicYear={selectedAcademicYear}
@@ -117,11 +117,9 @@ export const AttendanceLandingPage: React.FC = () => {
               setSelectedProgramme={setSelectedProgramme}
               selectedBatch={selectedBatch}
               setSelectedBatch={setSelectedBatch}
-              selectedSection={selectedSection}
-              setSelectedSection={setSelectedSection}
               attendanceDate={attendanceDate}
               setAttendanceDate={setAttendanceDate}
-              onLoadAttendance={handleLoadAttendance}
+              onSelectSection={handleLoadAttendance}
               isCreatingOrLoading={createSessionMutation.isPending}
             />
             <OfficeStaffRecentSessions />

@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useStudents, STUDENT_KEYS } from '../hooks/useStudents';
 import { studentsApi, type StudentInlineUpdatePayload, type StudentListItem } from '../api/studentsApi';
 import { useAttendanceBranches } from '../../attendance/hooks/useAttendance';
+import { StudentProfileSidePanel } from '../components/StudentProfileSidePanel';
 
 type StudentColumn = {
   key: string;
@@ -89,51 +90,10 @@ function getYearLevelDisplay(student: StudentListItem): string {
 const studentColumns: StudentColumn[] = [
   { key: 'admissionNumber', label: 'Admission No', value: (s) => s.admissionNumber, className: 'font-mono text-teal-700 font-bold' },
   { key: 'studentName', label: 'Student Name', value: (s) => s.displayName ?? s.legalName ?? s.name, className: 'font-bold text-slate-900', updateKey: 'student_name' },
-  { key: 'gender', label: 'Gender', value: (s) => s.gender, updateKey: 'gender', inputType: 'select', options: ['MALE', 'FEMALE', 'OTHER'] },
-  {
-    key: 'dateOfBirth',
-    label: 'Date Of Birth',
-    value: (s) => formatDateForDisplay(s.dateOfBirth ?? s.dob),
-    editValue: (s) => formatDateForEdit(s.dateOfBirth ?? s.dob),
-    updateKey: 'date_of_birth',
-    inputType: 'date',
-  },
-  { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
-  { key: 'studentEmail', label: 'Student Email', value: (s) => s.studentEmail, updateKey: 'student_email' },
-  { key: 'academicYearName', label: 'Academic Year', value: (s) => s.academicYearName },
-  { key: 'yearLevel', label: 'Year Level', value: getYearLevelDisplay },
   { key: 'programmeName', label: 'Programme / Stream', value: getProgrammeDisplay },
   { key: 'sectionName', label: 'Section', value: getSectionDisplay },
-  { key: 'rollNumber', label: 'Roll No', value: (s) => s.rollNumber ?? s.rollNo, updateKey: 'roll_number' },
-  {
-    key: 'joiningDate',
-    label: 'Joining Date',
-    value: (s) => formatDateForDisplay(s.joiningDate),
-    editValue: (s) => formatDateForEdit(s.joiningDate),
-    updateKey: 'joining_date',
-    inputType: 'date',
-  },
-  {
-    key: 'endingDate',
-    label: 'Ending Date',
-    value: (s) => formatDateForDisplay(s.endingDate),
-    editValue: (s) => formatDateForEdit(s.endingDate),
-    updateKey: 'ending_date',
-    inputType: 'date',
-  },
-  { key: 'guardianName', label: 'Guardian Name', value: (s) => s.guardianName ?? s.father_name, updateKey: 'guardian_name' },
-  {
-    key: 'guardianRelationship',
-    label: 'Relationship',
-    value: (s) => formatRelationship(s.guardianRelationship ?? s.guardian_relationship),
-    editValue: (s) => s.guardianRelationship ?? s.guardian_relationship,
-    updateKey: 'guardian_relationship',
-    inputType: 'select',
-    options: ['FATHER', 'MOTHER', 'LEGAL_GUARDIAN', 'RELATIVE', 'SPONSOR', 'OTHER'],
-  },
+  { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
   { key: 'guardianPhone', label: 'Guardian Phone', value: (s) => s.guardianPhone ?? s.guardian_phone, updateKey: 'guardian_phone' },
-  { key: 'guardianEmail', label: 'Guardian Email', value: (s) => s.guardianEmail, updateKey: 'guardian_email' },
-  { key: 'studentCreatedAt', label: 'Student Created', value: (s) => formatDateForDisplay(s.studentCreatedAt) },
 ];
 
 function getHeaderCellClass(column: StudentColumn): string {
@@ -261,6 +221,7 @@ export const StudentsPage: React.FC = () => {
   const [editMode, setEditMode] = useState<boolean>(false);
   const [savingEdits, setSavingEdits] = useState<boolean>(false);
   const [draftChanges, setDraftChanges] = useState<Record<string, StudentInlineUpdatePayload>>({});
+  const [selectedStudent, setSelectedStudent] = useState<StudentListItem | null>(null);
   
   // Pagination
   const PAGE_SIZE = 50;
@@ -473,7 +434,10 @@ export const StudentsPage: React.FC = () => {
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-teal-600" /> Student Directory & Enrollment Roster
+            <GraduationCap className="w-6 h-6 text-teal-600" /> Student Directory
+            <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-full border border-slate-200 ml-2">
+              {filteredStudents.length} {filteredStudents.length === 1 ? 'Student' : 'Students'}
+            </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Manage student enrollments, course stream assignments, and guardian contact profiles connected to PostgreSQL.
@@ -605,7 +569,7 @@ export const StudentsPage: React.FC = () => {
       ) : (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="max-h-[64vh] overflow-auto">
-            <table className="min-w-[1900px] w-max text-left text-xs border-collapse">
+            <table className="min-w-[900px] w-full text-left text-xs border-collapse">
               <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
                 {studentColumns.map((column) => (
@@ -617,7 +581,11 @@ export const StudentsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {paginatedStudents.map((s) => (
-                <tr key={s.id} className="group hover:bg-slate-50/80 transition">
+                <tr 
+                  key={s.id} 
+                  className={`group hover:bg-slate-50/80 transition ${!editMode ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                  onClick={() => !editMode && setSelectedStudent(s)}
+                >
                   {studentColumns.map((column) => (
                     <td
                       key={`${s.id}-${column.key}`}
@@ -927,6 +895,12 @@ export const StudentsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Side Panel */}
+      <StudentProfileSidePanel 
+        student={selectedStudent} 
+        onClose={() => setSelectedStudent(null)} 
+      />
     </div>
   );
 };

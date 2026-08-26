@@ -43,6 +43,8 @@ export const AttendanceSessionPage: React.FC = () => {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmReturn, setConfirmReturn] = useState(false);
   const [returnReason, setReturnReason] = useState("");
+  const [showUnmarkedWarning, setShowUnmarkedWarning] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   useEffect(() => {
     if (session) {
@@ -70,6 +72,7 @@ export const AttendanceSessionPage: React.FC = () => {
   const handleMarkStudent = (enrollmentId: string, status: AttendanceStatus) => {
     if (session?.status !== "DRAFT") return;
     setLocalState((prev) => ({ ...prev, [enrollmentId]: status }));
+    if (showUnmarkedWarning) setShowUnmarkedWarning(false);
   };
 
   const handleMarkAllPresent = () => {
@@ -81,6 +84,7 @@ export const AttendanceSessionPage: React.FC = () => {
       });
       return next;
     });
+    if (showUnmarkedWarning) setShowUnmarkedWarning(false);
   };
 
   const handleClearAll = () => {
@@ -107,6 +111,7 @@ export const AttendanceSessionPage: React.FC = () => {
       {
         onSuccess: () => {
           setSuccessMsg("Draft saved.");
+          setLastSaved(new Date());
           setTimeout(() => setSuccessMsg(null), 3000);
         },
         onError: (err: unknown) => handleApiError(err, "Failed to save draft"),
@@ -362,6 +367,7 @@ export const AttendanceSessionPage: React.FC = () => {
           onMarkStudent={handleMarkStudent}
           editable={isEditable}
           searchQuery={searchQuery}
+          showUnmarkedWarning={showUnmarkedWarning}
         />
 
         {/* Session meta for finalized/submitted */}
@@ -418,11 +424,23 @@ export const AttendanceSessionPage: React.FC = () => {
                   {saveDraftMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span className="hidden sm:inline">Save</span>
                 </button>
+                {lastSaved && (
+                  <span className="hidden sm:inline-block text-xs font-medium text-slate-400 italic mr-2">
+                    Saved at {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
                 {canSubmit && (
                   <button
                     onClick={() => {
                       if (counts.unmarked > 0) {
-                        setError(`${counts.unmarked} student(s) are still unmarked.`);
+                        setShowUnmarkedWarning(true);
+                        setError(`${counts.unmarked} student(s) are still unmarked. Please review the highlighted rows.`);
+                        setTimeout(() => {
+                          const firstUnmarked = document.querySelector(".unmarked-row");
+                          if (firstUnmarked) {
+                            firstUnmarked.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }
+                        }, 100);
                         return;
                       }
                       setConfirmSubmit(true);

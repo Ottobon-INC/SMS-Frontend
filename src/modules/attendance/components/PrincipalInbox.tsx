@@ -156,6 +156,33 @@ export const PrincipalInbox: React.FC = () => {
         )}
       </section>
 
+      {/* 2. Historical / Finalized Records */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Historical Records</h2>
+          {sessions.filter(s => s.status === "FINALIZED").length > 0 && (
+            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full border border-slate-200">
+              {sessions.filter(s => s.status === "FINALIZED").length} finalized
+            </span>
+          )}
+        </div>
+
+        {sessions.filter(s => s.status === "FINALIZED").length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 bg-slate-50 rounded-2xl border border-slate-200 text-center shadow-sm">
+            <h3 className="text-sm font-bold text-slate-500 mb-1">No Historical Records</h3>
+            <p className="text-slate-400 text-xs max-w-sm">
+              Past attendance sessions that have been finalized will appear here for your reference.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 opacity-90">
+            {sessions
+              .filter(s => s.status === "FINALIZED")
+              .sort((a, b) => new Date(b.attendanceDate).getTime() - new Date(a.attendanceDate).getTime())
+              .map(session => renderSessionCard(session, true))}
+          </div>
+        )}
+      </section>
     </div>
   );
 };

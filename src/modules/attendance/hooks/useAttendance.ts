@@ -10,6 +10,7 @@ export const ATTENDANCE_KEYS = {
   all: ["attendance"] as const,
   session: (id: string) => [...ATTENDANCE_KEYS.all, "session", id] as const,
   sessions: (status?: string) => [...ATTENDANCE_KEYS.all, "sessions", status || "all"] as const,
+  sectionsStatus: (date: string, batchId: string) => [...ATTENDANCE_KEYS.all, "sectionsStatus", date, batchId] as const,
   lookups: ["attendance", "lookups"] as const,
 };
 
@@ -83,6 +84,15 @@ export function useReturnAttendanceSession() {
       queryClient.setQueryData(ATTENDANCE_KEYS.session(data.id), data);
       queryClient.invalidateQueries({ queryKey: ATTENDANCE_KEYS.sessions() });
     },
+  });
+}
+
+export function useAttendanceSectionsStatus(date: string, batchId?: string) {
+  return useQuery({
+    queryKey: ATTENDANCE_KEYS.sectionsStatus(date, batchId || ""),
+    queryFn: () => attendanceApi.getSectionsStatus(date, batchId as string),
+    enabled: !!batchId && !!date,
+    staleTime: 0, // Always fetch fresh as statuses might change
   });
 }
 

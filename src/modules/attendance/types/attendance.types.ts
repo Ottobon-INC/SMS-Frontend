@@ -16,6 +16,7 @@ export interface AttendanceSessionListItem {
   tenantId: string;
   branchId: string;
   academicYearId: string;
+  batchId: string;
   sectionId: string;
   sectionName: string;
   batchName: string;
@@ -34,6 +35,7 @@ export interface AttendanceSessionResponse {
   tenantId: string;
   branchId: string;
   academicYearId: string;
+  batchId: string;
   sectionId: string;
   attendanceDate: string;
   status: SessionStatus;
@@ -59,6 +61,14 @@ export interface AttendanceRecordUpdate {
 
 export interface AttendanceDraftSavePayload {
   records: AttendanceRecordUpdate[];
+}
+
+export interface SectionAttendanceStatus {
+  sectionId: string;
+  sectionName: string;
+  batchName: string;
+  status: SessionStatus | "UNMARKED";
+  sessionId?: string | null;
 }
 
 // Academic Lookup Types from importsApi
