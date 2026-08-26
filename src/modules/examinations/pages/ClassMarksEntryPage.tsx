@@ -16,6 +16,10 @@ interface StudentItem {
 interface SectionItem {
   id: string;
   name: string;
+  code?: string;
+  batchId?: string | null;
+  batchName?: string | null;
+  batchYearLevel?: string | null;
   status?: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED' | 'PENDING';
   studentCount?: number;
   enteredCount?: number;
@@ -122,38 +126,37 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
         }
       }
       if (examList && examList.length > 0) {
-        setExams(examList);
-        setSelectedExamId((curr) => {
-          if (initialExamId && examList.some((e) => e.id === initialExamId)) {
+        const validRealExams = examList.filter((e) => e.id && e.id.includes('-') && !e.id.startsWith('exam-'));
+        const activeList = validRealExams.length > 0 ? validRealExams : examList;
+        setExams(activeList);
+        setSelectedExamId(() => {
+          if (initialExamId && activeList.some((e) => e.id === initialExamId)) {
             return initialExamId;
           }
-          if (curr && examList.some((e) => e.id === curr)) {
-            return curr;
-          }
-          return examList[0].id;
+          return activeList[0].id;
         });
       }
 
     }).catch((err) => console.error('Failed to initialize branches/exams:', err));
-  }, [userBranchId, isDean]);
+  }, [userBranchId, isDean, initialExamId]);
 
   const [allExamSubjects, setAllExamSubjects] = useState<ExamSubject[]>([]);
 
-  // Auto-align selectedBranchId to exam's target branch UUID when a SINGLE_BRANCH exam is selected
-  useEffect(() => {
-    if (!selectedExam) return;
-    const targetBranchUuid = selectedExam.branchId || (selectedExam as any).branch_id;
-    if (targetBranchUuid && isDean && selectedBranchId !== targetBranchUuid) {
-      setSelectedBranchId(targetBranchUuid);
-    }
-  }, [selectedExam, isDean, selectedBranchId]);
-
   // Batch 2: Load ExamSubjects and Sections in parallel when selectedExamId or selectedBranchId changes
   useEffect(() => {
-    if (!selectedExamId) return;
+    if (!selectedExamId || selectedExamId.length < 30) return;
 
+    // Auto-align selectedBranchId to exam's target branch UUID when a SINGLE_BRANCH exam is selected
+    let effectiveBranchId = selectedBranchId;
+    if (selectedExam) {
+      const targetBranchUuid = selectedExam.branchId || (selectedExam as any).branch_id;
+      if (targetBranchUuid && isDean && selectedBranchId !== targetBranchUuid) {
+        effectiveBranchId = targetBranchUuid;
+        setSelectedBranchId(targetBranchUuid);
+      }
+    }
 
-    const fetchBranchId = !isDean ? userBranchId : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+    const fetchBranchId = !isDean ? userBranchId : (effectiveBranchId && effectiveBranchId !== 'ALL' ? effectiveBranchId : undefined);
 
     Promise.all([
       examinationsApi.getExamSubjects(selectedExamId),
@@ -168,9 +171,9 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
         setSelectedSectionId('');
       }
     }).catch((err) => console.error('Failed to load exam subjects/sections:', err));
-  }, [selectedExamId, selectedBranchId, isDean, userBranchId]);
+  }, [selectedExamId, selectedBranchId, isDean, userBranchId, selectedExam]);
 
-  // Dynamically filter displaySubjects for the selected section's stream/programme
+  // Stream-Aware Section Subject Filtering
   const displaySubjects = useMemo(() => {
     if (!selectedSectionId || allExamSubjects.length === 0) return allExamSubjects;
     const activeSec = sections.find((s) => s.id === selectedSectionId);
@@ -178,22 +181,24 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
 
     const streamCode = activeSec.name.split('-')[0].toUpperCase();
 
-    // Map stream code to relevant subjects
     const allowedKeywords: Record<string, string[]> = {
-      MPC: ['MATH', 'PHYSIC', 'CHEMIS', 'ENG', 'SAN', 'TELUGU'],
-      BIPC: ['BOTANY', 'ZOOLOGY', 'PHYSIC', 'CHEMIS', 'ENG', 'SAN', 'TELUGU'],
-      CEC: ['CIVIC', 'COMMERCE', 'ECONOM', 'ENG', 'SAN', 'TELUGU'],
-      MEC: ['MATH', 'COMMERCE', 'ECONOM', 'ENG', 'SAN', 'TELUGU'],
-      HEC: ['HISTORY', 'ECONOM', 'CIVIC', 'ENG', 'SAN', 'TELUGU'],
+      BIPC: ['BOT', 'ZOO', 'PHY', 'CHE', 'ENG', 'SAN', 'TEL', 'BOTANY', 'BOTONY', 'ZOOLOGY', 'PHYSIC', 'PHISCIS', 'CHEMIS', 'ENGLISH'],
+      MPC: ['MAT', 'MATH', 'PHY', 'CHE', 'ENG', 'SAN', 'TEL', 'MATHEMATIC', 'PHYSIC', 'PHISCIS', 'CHEMIS', 'ENGLISH'],
+      CEC: ['CIV', 'COM', 'ECO', 'ENG', 'SAN', 'TEL', 'CIVIC', 'COMMERCE', 'ECONOM', 'ENGLISH'],
+      MEC: ['MAT', 'MATH', 'COM', 'ECO', 'ENG', 'SAN', 'TEL', 'MATHEMATIC', 'COMMERCE', 'ECONOM', 'ENGLISH'],
+      HEC: ['HIS', 'ECO', 'CIV', 'ENG', 'SAN', 'TEL', 'HISTORY', 'ECONOM', 'CIVIC', 'ENGLISH'],
     };
 
     const keywords = allowedKeywords[streamCode];
     if (!keywords) return allExamSubjects;
 
-    return allExamSubjects.filter((sub) => {
-      const nameUpper = (sub.subjectName || sub.subjectCode || '').toUpperCase();
-      return keywords.some((kw) => nameUpper.includes(kw));
+    const filtered = allExamSubjects.filter((sub) => {
+      const nameUpper = (sub.subjectName || '').toUpperCase();
+      const codeUpper = (sub.subjectCode || '').toUpperCase();
+      return keywords.some((kw) => nameUpper.includes(kw) || codeUpper.includes(kw) || kw.includes(codeUpper));
     });
+
+    return filtered.length > 0 ? filtered : allExamSubjects;
   }, [allExamSubjects, selectedSectionId, sections]);
 
   // Batch 3: Load Enrolled Students & Student Exam Records in parallel when selectedSectionId changes
@@ -521,20 +526,21 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
           <span className="text-xs text-slate-400 font-medium">Click a section card to open its marks matrix</span>
         </div>
 
-        {/* Stream Filter Bar */}
+        {/* Stream / Batch Filter Bar */}
         {sections.length > 0 && (
           <div className="flex items-center gap-2 pt-1 pb-2 border-b border-slate-100 overflow-x-auto">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Filter Stream:</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Filter Batch:</span>
             <button
               type="button"
               onClick={() => setSelectedStreamCode('ALL')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                 selectedStreamCode === 'ALL'
                   ? 'bg-slate-900 text-white shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              All Streams ({sections.length})
+              <span>All Batches</span>
+              <span className="px-1.5 py-0.2 bg-white/20 rounded-md text-[10px]">{sections.length}</span>
             </button>
             {availableStreamCodes.map((code) => {
               const count = sections.filter((s) => s.name && s.name.startsWith(code)).length;
@@ -543,13 +549,14 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
                   key={code}
                   type="button"
                   onClick={() => setSelectedStreamCode(code)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                     selectedStreamCode === code
                       ? 'bg-teal-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {code} ({count})
+                  <span>📦 {code} Batch</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${selectedStreamCode === code ? 'bg-teal-700' : 'bg-slate-200 text-slate-700'}`}>{count}</span>
                 </button>
               );
             })}
@@ -558,28 +565,49 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
 
         {filteredSections.length === 0 ? (
           <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500 font-medium">
-            No class sections found matching the selected stream filter.
+            No class sections found matching the selected stream/batch filter.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {filteredSections.map((sec) => {
+          (() => {
+            const firstYearSections = filteredSections.filter(
+              (sec) => sec.batchYearLevel === '1' || sec.batchYearLevel === 'First Year' || (sec.name && (sec.name.includes('-1') || sec.name.toLowerCase().includes('1st') || sec.name.toLowerCase().includes('jr')))
+            );
+            const secondYearSections = filteredSections.filter(
+              (sec) => sec.batchYearLevel === '2' || sec.batchYearLevel === 'Second Year' || (sec.name && (sec.name.includes('-2') || sec.name.toLowerCase().includes('2nd') || sec.name.toLowerCase().includes('sr')))
+            );
+            const remainingSections = filteredSections.filter(
+              (sec) => !firstYearSections.includes(sec) && !secondYearSections.includes(sec)
+            );
+
+            // Helper to render a section card
+            const renderSectionCard = (sec: SectionItem, yearTheme: '1st' | '2nd' | 'general') => {
               const isSelected = sec.id === selectedSectionId;
-              const streamName = sec.name ? sec.name.split('-')[0] : 'General';
+              const streamCode = sec.name ? sec.name.split('-')[0] : 'General';
+              const batchLabel = sec.batchName || `${streamCode} Batch`;
+              const badgeThemeClass = yearTheme === '1st'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : yearTheme === '2nd'
+                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                : 'bg-teal-50 text-teal-800 border-teal-200';
+
               return (
                 <div
                   key={sec.id}
                   onClick={() => handleSectionSwitchAttempt(sec.id)}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-teal-500 bg-teal-50/40 ring-2 ring-teal-300 shadow-xs'
+                      ? yearTheme === '2nd'
+                        ? 'border-indigo-500 bg-indigo-50/40 ring-2 ring-indigo-300 shadow-xs'
+                        : 'border-teal-500 bg-teal-50/40 ring-2 ring-teal-300 shadow-xs'
                       : 'border-slate-200 bg-slate-50 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col">
                       <span className="font-extrabold text-sm text-slate-900">{sec.name}</span>
-                      <span className="px-1.5 py-0.5 bg-teal-50 text-teal-700 text-[10px] font-bold rounded">
-                        {streamName}
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 mt-0.5 border rounded-md text-[10px] font-bold w-fit ${badgeThemeClass}`}>
+                        <span>📦</span>
+                        <span>{batchLabel}</span>
                       </span>
                     </div>
                     <span
@@ -596,7 +624,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
                       {(sec.studentCount ?? 0) === 0 ? 'EXEMPTED' : sec.status ?? 'PENDING'}
                     </span>
                   </div>
-                  <div className="mt-2 text-xs text-slate-500 flex justify-between">
+                  <div className="mt-3 text-xs text-slate-500 flex justify-between pt-2 border-t border-slate-100">
                     <span>Enrolled: <strong>{sec.studentCount ?? 0}</strong></span>
                     <span>
                       Entered:{' '}
@@ -609,8 +637,60 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
                   </div>
                 </div>
               );
-            })}
-          </div>
+            };
+
+            return (
+              <div className="space-y-4">
+                {/* First Year Container Box */}
+                {(firstYearSections.length > 0 || (secondYearSections.length === 0 && remainingSections.length === 0)) && (
+                  <div className="p-4 rounded-2xl bg-emerald-50/30 border border-emerald-200/60 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-emerald-100">
+                      <span className="p-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold">🎓 1st Year</span>
+                      <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">First Year Classes (Junior Intermediate)</h3>
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full ml-auto">
+                        {firstYearSections.length} Classroom{firstYearSections.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {firstYearSections.map((sec) => renderSectionCard(sec, '1st'))}
+                      {firstYearSections.length === 0 && (
+                        <div className="col-span-full py-4 text-center text-xs text-slate-400 font-medium">No 1st Year class sections provisioned.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Second Year Container Box */}
+                {secondYearSections.length > 0 && (
+                  <div className="p-4 rounded-2xl bg-indigo-50/30 border border-indigo-200/60 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-indigo-100">
+                      <span className="p-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold">🎓 2nd Year</span>
+                      <h3 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">Second Year Classes (Senior Intermediate)</h3>
+                      <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100/60 px-2 py-0.5 rounded-full ml-auto">
+                        {secondYearSections.length} Classroom{secondYearSections.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {secondYearSections.map((sec) => renderSectionCard(sec, '2nd'))}
+                    </div>
+                  </div>
+                )}
+
+                {/* General/Unclassified Container Box (Fallback) */}
+                {remainingSections.length > 0 && (
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                      <span className="p-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold">🏫 General</span>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Other Classrooms</h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {remainingSections.map((sec) => renderSectionCard(sec, 'general'))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
       </div>
 
@@ -660,11 +740,14 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
               onChange={(e) => handleSectionSwitchAttempt(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold outline-none"
             >
-              {sections.map((sec) => (
-                <option key={sec.id} value={sec.id}>
-                  {sec.name} ({sec.status ?? 'PENDING'})
-                </option>
-              ))}
+              {sections.map((sec) => {
+                const yLvl = sec.batchYearLevel === '2' || (sec.batchName && sec.batchName.toLowerCase().includes('second')) ? '2nd Year' : '1st Year';
+                return (
+                  <option key={sec.id} value={sec.id}>
+                    {sec.name} ({yLvl} - {sec.status ?? 'PENDING'})
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>

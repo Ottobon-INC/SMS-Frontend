@@ -9,6 +9,7 @@ export const ExaminationsContainer: React.FC = () => {
   if (view === 'MARKS_ENTRY') {
     return (
       <ClassMarksEntryPage
+        key={activeExamId || 'default'}
         initialExamId={activeExamId}
         onBack={() => setView('EXAMS_LIST')}
       />
@@ -18,7 +19,7 @@ export const ExaminationsContainer: React.FC = () => {
   return (
     <ExamsPage
       onNavigateToMarksEntry={(examId?: string) => {
-        if (examId) setActiveExamId(examId);
+        setActiveExamId(examId || '');
         setView('MARKS_ENTRY');
       }}
     />
