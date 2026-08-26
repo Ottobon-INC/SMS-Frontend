@@ -283,6 +283,14 @@ export const examinationsApi = {
     }
   },
 
+  async getBranchProgrammes(branchId: string): Promise<{ id: string; code: string; name: string; streamCode?: string; coachingTrack?: string; displayLabel?: string; baseStreamLabel?: string; yearLevel: string; subjectIds?: string[] }[]> {
+    try {
+      return await apiGet<{ id: string; code: string; name: string; streamCode?: string; coachingTrack?: string; displayLabel?: string; baseStreamLabel?: string; yearLevel: string; subjectIds?: string[] }[]>(`/branches/${branchId}/programmes`);
+    } catch {
+      return [];
+    }
+  },
+
   async getSubjects(): Promise<{ id: string; code: string; name: string; maxMarks: number; passMarks: number }[]> {
     try {
       return await apiGet<{ id: string; code: string; name: string; maxMarks: number; passMarks: number }[]>('/academic-structure/subjects');
@@ -291,9 +299,9 @@ export const examinationsApi = {
     }
   },
 
-  async getProgrammes(): Promise<{ id: string; code: string; name: string; yearLevel: string; subjectIds?: string[] }[]> {
+  async getProgrammes(): Promise<{ id: string; code: string; name: string; streamCode?: string; coachingTrack?: string; displayLabel?: string; baseStreamLabel?: string; yearLevel: string; subjectIds?: string[] }[]> {
     try {
-      return await apiGet<{ id: string; code: string; name: string; yearLevel: string; subjectIds?: string[] }[]>('/academic-structure/programmes');
+      return await apiGet<{ id: string; code: string; name: string; streamCode?: string; coachingTrack?: string; displayLabel?: string; baseStreamLabel?: string; yearLevel: string; subjectIds?: string[] }[]>('/academic-structure/programmes');
     } catch {
       return [];
     }

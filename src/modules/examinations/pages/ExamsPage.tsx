@@ -34,6 +34,10 @@ function ExamDispatchPill({ examId }: { examId: string }) {
   );
 }
 
+function programmeLabel(programme: Programme): string {
+  return programme.displayLabel || programme.name || programme.code;
+}
+
 export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) => void }> = ({
   onNavigateToMarksEntry,
 }) => {
@@ -153,17 +157,17 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
     if (examScope === 'ALL_BRANCHES') {
       fetchPromises = [
-        fetch('/api/v1/branches/ALL/programmes').then((res) => (res.ok ? res.json() : [])),
+        examinationsApi.getBranchProgrammes('ALL'),
       ];
     } else if (examScope === 'SELECTED_BRANCHES') {
       if (selectedBranchIds.length === 0) return;
       fetchPromises = selectedBranchIds.map((bId) =>
-        fetch(`/api/v1/branches/${bId}/programmes`).then((res) => (res.ok ? res.json() : []))
+        examinationsApi.getBranchProgrammes(bId)
       );
     } else {
       if (!selectedBranchId) return;
       fetchPromises = [
-        fetch(`/api/v1/branches/${selectedBranchId}/programmes`).then((res) => (res.ok ? res.json() : [])),
+        examinationsApi.getBranchProgrammes(selectedBranchId),
       ];
     }
 
@@ -728,7 +732,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                             : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        <span>{prog.code}</span>
+                        <span>{programmeLabel(prog)}</span>
                         <span className="text-[10px] opacity-80 font-normal">({prog.yearLevel})</span>
                       </button>
                     );

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, X, CheckCircle2, ShieldCheck, Layers, BookMarked, RefreshCw } from 'lucide-react';
+import { academicStructureApi } from '../../academic-structure/api/academicStructureApi';
+import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface Subject {
   id: string;
@@ -14,12 +16,33 @@ interface Programme {
   id: string;
   code: string;
   name: string;
+  streamCode?: string;
   coachingTrack?: string;
+  displayLabel?: string;
+  baseStreamLabel?: string;
   yearLevel: string;
   subjectIds?: string[];
 }
 
+const STREAM_OPTIONS = [
+  { code: 'MPC', label: 'Mathematics, Physics, Chemistry', tracks: ['IPE', 'JEE Mains', 'JEE Advanced', 'AP EAPCET - Engineering'], subjects: ['Mathematics', 'Physics', 'Chemistry', 'English'] },
+  { code: 'BIPC', label: 'Biology, Physics, Chemistry', tracks: ['IPE', 'NEET-UG', 'AP EAPCET - Agriculture & Pharmacy'], subjects: ['Botany', 'Zoology', 'Physics', 'Chemistry', 'English'] },
+  { code: 'MEC', label: 'Mathematics, Economics, Commerce', tracks: ['IPE', 'CA Foundation', 'CMA Foundation', 'CSEET', 'CUET-UG', 'IPMAT'], subjects: ['Mathematics', 'Economics', 'Commerce', 'English'] },
+  { code: 'CEC', label: 'Civics, Economics, Commerce', tracks: ['IPE', 'CA Foundation', 'CMA Foundation', 'CSEET', 'CUET-UG', 'IPMAT'], subjects: ['Civics', 'Economics', 'Commerce', 'English'] },
+  { code: 'HEC', label: 'History, Economics, Civics', tracks: ['IPE', 'CLAT', 'AILET', 'CUET-UG'], subjects: ['History', 'Economics', 'Civics', 'English'] },
+];
+
+function programmeLabel(programme: Programme): string {
+  return programme.displayLabel || programme.name || programme.code;
+}
+
+function programmeCodeFor(streamCode: string, track: string): string {
+  return `${streamCode}-${track.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+}
+
 export const InstitutionSetupPage: React.FC = () => {
+  const auth = useAuth();
+  const canManageAcademicStructure = auth.hasPermission('academic_structure.manage');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -36,29 +59,21 @@ export const InstitutionSetupPage: React.FC = () => {
   const [subjectPassMarks, setSubjectPassMarks] = useState<number>(35);
 
   // Group / Stream Form State
-  const [groupName, setGroupName] = useState('');
-  const [groupCode, setGroupCode] = useState('');
-  const [coachingTrack, setCoachingTrack] = useState('JEE Mains');
-  const [yearLevel, setYearLevel] = useState<string>('First Year');
+  const [groupCode, setGroupCode] = useState('MPC');
+  const [coachingTrack, setCoachingTrack] = useState('IPE');
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
+  const selectedStream = STREAM_OPTIONS.find((stream) => stream.code === groupCode) ?? STREAM_OPTIONS[0];
 
   const fetchAcademicData = async () => {
     setLoading(true);
     try {
-      const [subRes, progRes] = await Promise.all([
-        fetch('/api/v1/academic-structure/subjects'),
-        fetch('/api/v1/academic-structure/programmes'),
+      const [subData, progData] = await Promise.all([
+        academicStructureApi.getSubjects(),
+        academicStructureApi.getProgrammes(),
       ]);
-
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        setSubjects(subData);
-      }
-      if (progRes.ok) {
-        const progData = await progRes.json();
-        setProgrammes(progData);
-      }
+      setSubjects(subData);
+      setProgrammes(progData);
     } catch (err) {
       console.error('Failed to fetch academic data:', err);
     } finally {
@@ -70,6 +85,14 @@ export const InstitutionSetupPage: React.FC = () => {
     fetchAcademicData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedStream.tracks.includes(coachingTrack)) {
+      setCoachingTrack(selectedStream.tracks[0]);
+    }
+    const subjectNames = new Set(selectedStream.subjects.map((name) => name.toLowerCase()));
+    setSelectedSubjectIds(subjects.filter((subject) => subjectNames.has(subject.name.toLowerCase())).map((subject) => subject.id));
+  }, [groupCode, subjects]);
+
   const triggerNotify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 4000);
@@ -77,31 +100,28 @@ export const InstitutionSetupPage: React.FC = () => {
 
   const handleCreateSubject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageAcademicStructure) {
+      triggerNotify('You do not have permission to manage subjects.');
+      return;
+    }
     if (!subjectName.trim() || !subjectCode.trim()) return;
 
     try {
-      const res = await fetch('/api/v1/academic-structure/subjects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: subjectCode.trim().toUpperCase(),
-          name: subjectName.trim(),
-          type: subjectType,
-          maxMarks: Number(subjectMaxMarks) || 100,
-          passMarks: Number(subjectPassMarks) || 35,
-        }),
+      const newSub = await academicStructureApi.createSubject({
+        code: subjectCode.trim().toUpperCase(),
+        name: subjectName.trim(),
+        type: subjectType,
+        maxMarks: Number(subjectMaxMarks) || 100,
+        passMarks: Number(subjectPassMarks) || 35,
       });
 
-      if (res.ok) {
-        const newSub = await res.json();
-        setSubjects((prev) => [...prev, newSub]);
-        setSubjectName('');
-        setSubjectCode('');
-        setSubjectMaxMarks(100);
-        setSubjectPassMarks(35);
-        setShowAddSubjectModal(false);
-        triggerNotify(`Master Subject "${newSub.name}" created by Dean!`);
-      }
+      setSubjects((prev) => [...prev, newSub]);
+      setSubjectName('');
+      setSubjectCode('');
+      setSubjectMaxMarks(100);
+      setSubjectPassMarks(35);
+      setShowAddSubjectModal(false);
+      triggerNotify(`Master Subject "${newSub.name}" created by Dean!`);
     } catch (err) {
       console.error('Failed to create subject:', err);
     }
@@ -109,30 +129,25 @@ export const InstitutionSetupPage: React.FC = () => {
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupName.trim() || !groupCode.trim()) return;
+    if (!canManageAcademicStructure) {
+      triggerNotify('You do not have permission to manage course stream groups.');
+      return;
+    }
+    if (!groupCode || !coachingTrack) return;
 
     try {
-      const res = await fetch('/api/v1/academic-structure/programmes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: groupCode.trim().toUpperCase(),
-          name: groupName.trim(),
-          coachingTrack,
-          yearLevel,
-          subjectIds: selectedSubjectIds,
-        }),
+      const newGroup = await academicStructureApi.createProgramme({
+        streamCode: groupCode,
+        coachingTrack,
+        subjectIds: selectedSubjectIds,
       });
 
-      if (res.ok) {
-        const newGroup = await res.json();
-        setProgrammes((prev) => [...prev, { ...newGroup, subjectIds: selectedSubjectIds, coachingTrack }]);
-        setGroupName('');
-        setGroupCode('');
-        setSelectedSubjectIds([]);
-        setShowAddGroupModal(false);
-        triggerNotify(`Course Stream Group "${newGroup.code}" created!`);
-      }
+      setProgrammes((prev) => [...prev, newGroup]);
+      setGroupCode('MPC');
+      setCoachingTrack('IPE');
+      setSelectedSubjectIds([]);
+      setShowAddGroupModal(false);
+      triggerNotify(`Course Stream Group "${programmeLabel(newGroup)}" created!`);
     } catch (err) {
       console.error('Failed to create stream:', err);
     }
@@ -171,18 +186,22 @@ export const InstitutionSetupPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => setShowAddSubjectModal(true)}
-            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
-          >
-            <BookMarked className="w-4 h-4" /> Add Master Subject
-          </button>
-          <button
-            onClick={() => setShowAddGroupModal(true)}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
-          >
-            <Layers className="w-4 h-4 text-teal-400" /> Add Course Stream Group
-          </button>
+          {canManageAcademicStructure && (
+            <>
+              <button
+                onClick={() => setShowAddSubjectModal(true)}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+              >
+                <BookMarked className="w-4 h-4" /> Add Master Subject
+              </button>
+              <button
+                onClick={() => setShowAddGroupModal(true)}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+              >
+                <Layers className="w-4 h-4 text-teal-400" /> Add Course Stream Group
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -240,14 +259,15 @@ export const InstitutionSetupPage: React.FC = () => {
                   <div key={prog.id} className="pt-3 space-y-1.5">
                     <div className="flex justify-between items-center">
                       <div>
-                        <span className="font-bold text-slate-900">{prog.code} - {prog.name}</span>
+                        <span className="font-bold text-slate-900">{programmeLabel(prog)}</span>
+                        {prog.baseStreamLabel && <span className="ml-2 text-[10px] text-slate-500">{prog.baseStreamLabel}</span>}
                         {prog.coachingTrack && (
                           <span className="ml-2 text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
                             {prog.coachingTrack}
                           </span>
                         )}
                       </div>
-                      <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600">{prog.yearLevel}</span>
+                      <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600">Both Years</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {assignedSubs.length > 0 ? (
@@ -368,29 +388,21 @@ export const InstitutionSetupPage: React.FC = () => {
             <form onSubmit={handleCreateGroup} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Stream Code *</label>
-                <input
-                  type="text"
+                <select
                   required
-                  placeholder="e.g. MPC or BiPC"
                   value={groupCode}
                   onChange={(e) => setGroupCode(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                />
+                >
+                  {STREAM_OPTIONS.map((stream) => (
+                    <option key={stream.code} value={stream.code}>
+                      {stream.code}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Stream Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Maths, Physics, Chemistry"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Coaching Track</label>
                   <select
@@ -398,27 +410,28 @@ export const InstitutionSetupPage: React.FC = () => {
                     onChange={(e) => setCoachingTrack(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
                   >
-                    <option value="JEE Mains">JEE Mains & Advanced</option>
-                    <option value="NEET">NEET Medical Track</option>
-                    <option value="Regular Board">Regular Board Track</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Year Level</label>
-                  <select
-                    value={yearLevel}
-                    onChange={(e) => setYearLevel(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                  >
-                    <option value="First Year">First Year</option>
-                    <option value="Second Year">Second Year</option>
+                    {selectedStream.tracks.map((track) => (
+                      <option key={track} value={track}>
+                        {track}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs text-teal-900 space-y-1">
+                <div><span className="font-bold">Programme:</span> {groupCode} - {coachingTrack}</div>
+                <div><span className="font-bold">Base Stream:</span> {selectedStream.label}</div>
+                <div><span className="font-bold">Code:</span> <span className="font-mono">{programmeCodeFor(groupCode, coachingTrack)}</span></div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Assign Master Subjects</label>
+                {selectedStream.subjects.some((name) => !subjects.some((subject) => subject.name.toLowerCase() === name.toLowerCase())) && (
+                  <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                    Create missing default subjects first: {selectedStream.subjects.filter((name) => !subjects.some((subject) => subject.name.toLowerCase() === name.toLowerCase())).join(', ')}
+                  </div>
+                )}
                 <div className="space-y-1.5 max-h-40 overflow-y-auto p-2 bg-slate-50 rounded-xl border">
                   {subjects.map((sub) => {
                     const isChecked = selectedSubjectIds.includes(sub.id);

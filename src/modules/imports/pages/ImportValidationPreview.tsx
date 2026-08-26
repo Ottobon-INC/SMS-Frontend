@@ -37,6 +37,26 @@ function getEditableValue(value: unknown): string {
   return "";
 }
 
+const studentDateColumns = new Set(["Date Of Birth", "Joining Date", "Ending Date"]);
+
+function normalizeDateValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return value.includes("T") ? value.split("T", 1)[0] : value;
+}
+
+function normalizePreviewValue(column: string, value: unknown): unknown {
+  if (studentDateColumns.has(column)) {
+    return normalizeDateValue(value);
+  }
+  return value;
+}
+
+function normalizeStudentPreviewRow(rawData: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(rawData).map(([column, value]) => [column, normalizePreviewValue(column, value)])
+  );
+}
+
 function normalizeFieldLabel(value?: string): string {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -162,7 +182,8 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   const startEditingRow = (row: ImportRowResult) => {
     setError(null);
     setEditingRowId(row.id);
-    setEditedRow({ ...(pendingRowEdits[row.id] ?? row.raw_data) });
+    const sourceRow = pendingRowEdits[row.id] ?? row.raw_data;
+    setEditedRow(importType === "students" ? normalizeStudentPreviewRow(sourceRow) : { ...sourceRow });
   };
 
   const cancelEditingRow = () => {
@@ -171,7 +192,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
   };
 
   const updateEditedCell = (column: string, value: string) => {
-    setEditedRow((current) => ({ ...current, [column]: value }));
+    setEditedRow((current) => ({ ...current, [column]: normalizePreviewValue(column, value) }));
   };
 
   const applyEditedRow = () => {
@@ -179,7 +200,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
 
     setPendingRowEdits((current) => ({
       ...current,
-      [editingRowId]: editedRow,
+      [editingRowId]: importType === "students" ? normalizeStudentPreviewRow(editedRow) : editedRow,
     }));
     setEditingRowId(null);
     setEditedRow({});
@@ -190,7 +211,7 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
     if (!batchId) return;
     const rowsToSave = Object.entries(pendingRowEdits).map(([rowId, rawData]) => ({
       row_id: rowId,
-      raw_data: rawData,
+      raw_data: importType === "students" ? normalizeStudentPreviewRow(rawData) : rawData,
     }));
     if (rowsToSave.length === 0) return;
 
@@ -422,7 +443,10 @@ export function ImportValidationPreview({ importType = "students" }: ImportValid
                   const isEditing = editingRowId === row.id;
                   const stagedRawData = pendingRowEdits[row.id];
                   const hasPendingEdit = !!stagedRawData;
-                  const displayRawData = stagedRawData ?? row.raw_data;
+                  const displayRawData =
+                    importType === "students"
+                      ? normalizeStudentPreviewRow(stagedRawData ?? row.raw_data)
+                      : stagedRawData ?? row.raw_data;
 
                   return (
                     <tr

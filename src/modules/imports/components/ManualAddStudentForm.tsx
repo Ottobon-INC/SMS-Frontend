@@ -51,11 +51,17 @@ const GENDER_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
-function formatProgrammeLabel(programme?: { code?: string; name?: string }): string {
+function formatProgrammeLabel(programme?: { code?: string; name?: string; displayLabel?: string | null; baseStreamLabel?: string | null }): string {
   if (!programme) {
     return "";
   }
+  if (programme.displayLabel) {
+    return programme.displayLabel;
+  }
   if (programme.code && programme.name) {
+    if (programme.name.startsWith(`${programme.code} -`)) {
+      return programme.name;
+    }
     return `${programme.code} - ${programme.name}`;
   }
   return programme.code || programme.name || "";

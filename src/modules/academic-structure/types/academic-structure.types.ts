@@ -11,7 +11,10 @@ export interface Programme {
   id: string;
   code: string;
   name: string;
+  streamCode?: string;
   coachingTrack?: string;
+  displayLabel?: string;
+  baseStreamLabel?: string;
   yearLevel: string;
   subjectIds?: string[];
 }
@@ -25,11 +28,26 @@ export interface SubjectPayload {
 }
 
 export interface ProgrammePayload {
-  code: string;
-  name: string;
+  streamCode: string;
   coachingTrack: string;
-  yearLevel: string;
   subjectIds: string[];
+}
+
+export interface ProgrammeUpdatePayload {
+  subjectIds: string[];
+  status?: "ACTIVE" | "INACTIVE";
+}
+
+export interface ProgrammeOptionStream {
+  code: string;
+  label: string;
+  allowedTracks: string[];
+  defaultSubjects: string[];
+}
+
+export interface ProgrammeOptions {
+  streams: ProgrammeOptionStream[];
+  coachingTracks: string[];
 }
 
 export interface AcademicYear {

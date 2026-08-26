@@ -10,6 +10,10 @@ export type ProgrammeLookup = {
   id: string;
   code: string;
   name: string;
+  streamCode?: string | null;
+  coachingTrack?: string | null;
+  displayLabel?: string | null;
+  baseStreamLabel?: string | null;
   yearLevel: string;
 };
 

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Search, MapPin, Phone, Mail, CheckCircle2, X, RefreshCw, UserCheck, AlertCircle, Lock } from 'lucide-react';
+import { apiGet, apiPost } from '../../../api/client/apiClient';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 
   interface Branch {
@@ -42,18 +43,16 @@ interface SystemUser {
 }
 
 export const BranchesPage: React.FC = () => {
-  const { activeContext } = useAuth();
+  const auth = useAuth();
+  const { activeContext } = auth;
   const [branches, setBranches] = useState<Branch[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const isDeanOrAdmin =
-    activeContext?.role_codes.includes('INSTITUTION_ADMIN') ||
-    activeContext?.role_codes.includes('PLATFORM_ADMIN') ||
-    activeContext?.scope_type === 'TENANT' ||
-    activeContext?.scope_type === 'PLATFORM';
+  const canCreateBranch = auth.hasPermission('branch.create');
+  const canAssignPrincipal = auth.hasPermission('branch.update') || auth.hasPermission('role.assign');
   
   // Modal state for Add Branch
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -95,12 +94,9 @@ export const BranchesPage: React.FC = () => {
 
   const fetchMasterProgrammes = async () => {
     try {
-      const res = await fetch('/api/v1/academic-structure/programmes');
-      if (res.ok) {
-        const data = await res.json();
-        setAllMasterProgrammes(data);
-        return data;
-      }
+      const data = await apiGet<any[]>('/academic-structure/programmes');
+      setAllMasterProgrammes(data);
+      return data;
     } catch (err) {
       console.error('Failed to fetch master programmes:', err);
     }
@@ -117,12 +113,8 @@ export const BranchesPage: React.FC = () => {
       if (allMasterProgrammes.length === 0) {
         await fetchMasterProgrammes();
       }
-      const branchRes = await fetch(`/api/v1/branches/${branch.id}/programmes`);
-
-      if (branchRes.ok) {
-        const data = await branchRes.json();
-        setAssignedProgIds(data.map((p: any) => p.id));
-      }
+      const data = await apiGet<any[]>(`/branches/${branch.id}/programmes`);
+      setAssignedProgIds(data.map((p: any) => p.id));
     } catch (err) {
       console.error('Failed to fetch assigned branch programmes:', err);
     } finally {
@@ -133,11 +125,8 @@ export const BranchesPage: React.FC = () => {
   const fetchBranches = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/branches');
-      if (res.ok) {
-        const data = await res.json();
-        setBranches(data);
-      }
+      const data = await apiGet<Branch[]>('/branches');
+      setBranches(data);
     } catch (err) {
       console.error('Failed to fetch branches:', err);
     } finally {
@@ -147,14 +136,11 @@ export const BranchesPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/v1/users');
-      if (res.ok) {
-        const data = await res.json();
-        setSystemUsers(data);
-        if (data.length > 0) {
-          setContactPersonName(data[0].name);
-          setPrincipalUserId(data[0].id);
-        }
+      const data = await apiGet<SystemUser[]>('/users');
+      setSystemUsers(data);
+      if (data.length > 0) {
+        setContactPersonName(data[0].name);
+        setPrincipalUserId(data[0].id);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -170,6 +156,10 @@ export const BranchesPage: React.FC = () => {
   const handleAddBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
+    if (!canCreateBranch) {
+      setModalError('You do not have permission to create campus branches.');
+      return;
+    }
 
     if (!branchCode.trim()) {
       setModalError('Campus Code is required on Tab 1 (Basic Info)!');
@@ -185,44 +175,33 @@ export const BranchesPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/branches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: branchCode.trim().toUpperCase(),
-          name: branchName.trim(),
-          legal_name: legalName.trim() || `${branchName.trim()} Educational Campus`,
-          timezone,
-          address: {
-            street: streetAddress,
-            city,
-            district,
-            state: stateName,
-            pincode,
-          },
-          contact: {
-            primary_phone: phone || '+91 98765 43210',
-            email: email || 'branch@svic.edu',
-            contact_person_name: contactPersonName || 'Unassigned',
-            contact_person_role: contactPersonRole || 'Principal',
-          },
-        }),
+      const newBranch = await apiPost<Branch>('/branches', {
+        code: branchCode.trim().toUpperCase(),
+        name: branchName.trim(),
+        legal_name: legalName.trim() || `${branchName.trim()} Educational Campus`,
+        timezone,
+        address: {
+          street: streetAddress,
+          city,
+          district,
+          state: stateName,
+          pincode,
+        },
+        contact: {
+          primary_phone: phone || '+91 98765 43210',
+          email: email || 'branch@svic.edu',
+          contact_person_name: contactPersonName || 'Unassigned',
+          contact_person_role: contactPersonRole || 'Principal',
+        },
       });
-
-      if (res.ok) {
-        const newBranch = await res.json();
-        setBranches((prev) => [newBranch, ...prev]);
-        setShowAddModal(false);
-        resetForm();
-        setNotification(`Campus Branch "${newBranch.name}" created successfully!`);
-        setTimeout(() => setNotification(null), 4000);
-      } else {
-        const errTxt = await res.text();
-        setModalError(`Failed to create branch: ${errTxt || res.statusText}`);
-      }
+      setBranches((prev) => [newBranch, ...prev]);
+      setShowAddModal(false);
+      resetForm();
+      setNotification(`Campus Branch "${newBranch.name}" created successfully!`);
+      setTimeout(() => setNotification(null), 4000);
     } catch (err: any) {
       console.error('Failed to create branch:', err);
-      setModalError(`Connection error: ${err.message || 'Server error'}`);
+      setModalError(err.message || 'Failed to create branch.');
     } finally {
       setSubmitting(false);
     }
@@ -230,6 +209,10 @@ export const BranchesPage: React.FC = () => {
 
   const handleAssignPrincipal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAssignPrincipal) {
+      alert('You do not have permission to assign campus principals.');
+      return;
+    }
     if (!selectedBranch || !principalUserId) return;
 
     const selectedUser = systemUsers.find((u) => u.id === principalUserId);
@@ -245,27 +228,17 @@ export const BranchesPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/v1/branches/${selectedBranch.id}/assign-principal`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: selectedUser.id,
-          user_name: selectedUser.name,
-        }),
+      await apiPost(`/branches/${selectedBranch.id}/assign-principal`, {
+        user_id: selectedUser.id,
+        user_name: selectedUser.name,
       });
-
-      if (res.ok) {
-        await Promise.all([fetchBranches(), fetchUsers()]);
-        setShowAssignPrincipalModal(false);
-        setNotification(`Principal "${selectedUser.name}" assigned to ${selectedBranch.name}!`);
-        setTimeout(() => setNotification(null), 4000);
-      } else {
-        const errTxt = await res.text();
-        alert(`Failed to assign principal: ${errTxt}`);
-      }
+      await Promise.all([fetchBranches(), fetchUsers()]);
+      setShowAssignPrincipalModal(false);
+      setNotification(`Principal "${selectedUser.name}" assigned to ${selectedBranch.name}!`);
+      setTimeout(() => setNotification(null), 4000);
     } catch (err: any) {
       console.error('Failed to assign principal:', err);
-      alert(`Connection error: ${err.message || 'Server error'}`);
+      alert(err.message || 'Failed to assign principal.');
     }
   };
 
@@ -414,7 +387,7 @@ export const BranchesPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {isDeanOrAdmin ? (
+          {canCreateBranch ? (
             <button
               onClick={() => {
                 resetForm();
@@ -526,17 +499,19 @@ export const BranchesPage: React.FC = () => {
               </div>
 
               <div className="pt-2 flex gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedBranch(b);
-                    const assignedUser = systemUsers.find((u) => u.name === b.contact_person);
-                    setPrincipalUserId(assignedUser?.id || systemUsers[0]?.id || '');
-                    setShowAssignPrincipalModal(true);
-                  }}
-                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <UserCheck className="w-3.5 h-3.5 text-teal-600" /> Assign Principal
-                </button>
+                {canAssignPrincipal && (
+                  <button
+                    onClick={() => {
+                      setSelectedBranch(b);
+                      const assignedUser = systemUsers.find((u) => u.name === b.contact_person);
+                      setPrincipalUserId(assignedUser?.id || systemUsers[0]?.id || '');
+                      setShowAssignPrincipalModal(true);
+                    }}
+                    className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-teal-600" /> Assign Principal
+                  </button>
+                )}
                 <button
                   onClick={() => handleOpenProgrammesModal(b)}
                   className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200 transition flex items-center justify-center gap-1 cursor-pointer"
@@ -851,7 +826,10 @@ export const BranchesPage: React.FC = () => {
                   return (
                     <div key={p.id} className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
                       <div>
-                        <span className="font-bold text-slate-900 block text-xs">{p.code} — {p.name}</span>
+                        <span className="font-bold text-slate-900 block text-xs">{p.displayLabel || p.name || p.code}</span>
+                        {p.baseStreamLabel && (
+                          <span className="text-[10px] text-slate-500 font-medium block">{p.baseStreamLabel}</span>
+                        )}
                         {p.coachingTrack && (
                           <span className="text-[10px] text-slate-500 font-medium">Coaching: {p.coachingTrack}</span>
                         )}

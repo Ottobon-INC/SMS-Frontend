@@ -58,6 +58,10 @@ export interface Programme {
   id: string;
   code: string;
   name: string;
+  streamCode?: string;
+  coachingTrack?: string;
+  displayLabel?: string;
+  baseStreamLabel?: string;
   yearLevel: string;
   subjectIds?: string[];
 }

@@ -10,7 +10,8 @@ import {
   X,
 } from "lucide-react";
 import { academicStructureApi } from "../api/academicStructureApi";
-import type { AcademicSectionBatch, AcademicYear, Programme, Subject } from "../types";
+import { useAuth } from "../../authentication/providers/AuthProvider";
+import type { AcademicSectionBatch, AcademicYear, Programme, ProgrammeOptions, Subject } from "../types";
 
 interface BranchSummary {
   id: string;
@@ -18,7 +19,32 @@ interface BranchSummary {
   code?: string;
 }
 
+const fallbackProgrammeOptions: ProgrammeOptions = {
+  streams: [
+    { code: "MPC", label: "Mathematics, Physics, Chemistry", allowedTracks: ["IPE", "JEE Mains", "JEE Advanced", "AP EAPCET - Engineering"], defaultSubjects: ["Mathematics", "Physics", "Chemistry", "English"] },
+    { code: "BIPC", label: "Biology, Physics, Chemistry", allowedTracks: ["IPE", "NEET-UG", "AP EAPCET - Agriculture & Pharmacy"], defaultSubjects: ["Botany", "Zoology", "Physics", "Chemistry", "English"] },
+    { code: "MEC", label: "Mathematics, Economics, Commerce", allowedTracks: ["IPE", "CA Foundation", "CMA Foundation", "CSEET", "CUET-UG", "IPMAT"], defaultSubjects: ["Mathematics", "Economics", "Commerce", "English"] },
+    { code: "CEC", label: "Civics, Economics, Commerce", allowedTracks: ["IPE", "CA Foundation", "CMA Foundation", "CSEET", "CUET-UG", "IPMAT"], defaultSubjects: ["Civics", "Economics", "Commerce", "English"] },
+    { code: "HEC", label: "History, Economics, Civics", allowedTracks: ["IPE", "CLAT", "AILET", "CUET-UG"], defaultSubjects: ["History", "Economics", "Civics", "English"] },
+  ],
+  coachingTracks: [],
+};
+
+function programmeLabel(programme: Programme): string {
+  return programme.displayLabel || programme.name || programme.code;
+}
+
+function programmeBaseLabel(programme: Programme): string {
+  return programme.baseStreamLabel || programme.name;
+}
+
+function programmeCodeFor(streamCode: string, track: string): string {
+  return `${streamCode}-${track.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
 export function AcademicStructurePage() {
+  const auth = useAuth();
+  const canManageAcademicStructure = auth.hasPermission("academic_structure.manage");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +53,10 @@ export function AcademicStructurePage() {
 
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [editingProgramme, setEditingProgramme] = useState<Programme | null>(null);
+  const [editSubjectIds, setEditSubjectIds] = useState<string[]>([]);
+  const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [isSavingProgrammeEdit, setIsSavingProgrammeEdit] = useState(false);
 
   const [subjectName, setSubjectName] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
@@ -34,10 +64,9 @@ export function AcademicStructurePage() {
   const [subjectMaxMarks, setSubjectMaxMarks] = useState(100);
   const [subjectPassMarks, setSubjectPassMarks] = useState(35);
 
-  const [groupCode, setGroupCode] = useState("");
-  const [groupName, setGroupName] = useState("");
-  const [coachingTrack, setCoachingTrack] = useState("JEE Mains");
-  const [yearLevel, setYearLevel] = useState("First Year");
+  const [programmeOptions, setProgrammeOptions] = useState<ProgrammeOptions>(fallbackProgrammeOptions);
+  const [groupCode, setGroupCode] = useState("MPC");
+  const [coachingTrack, setCoachingTrack] = useState("IPE");
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
 
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
@@ -65,6 +94,10 @@ export function AcademicStructurePage() {
   const [isDefaultYear, setIsDefaultYear] = useState(false);
 
   const subjectById = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject])), [subjects]);
+  const selectedStream = programmeOptions.streams.find((stream) => stream.code === groupCode) ?? programmeOptions.streams[0];
+  const allowedTracks = selectedStream?.allowedTracks ?? [];
+  const generatedProgrammeCode = programmeCodeFor(groupCode, coachingTrack);
+  const generatedProgrammeLabel = `${groupCode} - ${coachingTrack}`;
 
   function notify(message: string) {
     setNotification(message);
@@ -75,16 +108,18 @@ export function AcademicStructurePage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSubjects, nextProgrammes, nextYears, branchesRes] = await Promise.all([
+      const [nextSubjects, nextProgrammes, nextYears, branchesRes, nextProgrammeOptions] = await Promise.all([
         academicStructureApi.getSubjects(),
         academicStructureApi.getProgrammes(),
         academicStructureApi.getAcademicYears(),
-        fetch("/api/v1/branches").then((r) => (r.ok ? (r.json() as Promise<BranchSummary[]>) : [])),
+        academicStructureApi.getBranches(),
+        academicStructureApi.getProgrammeOptions().catch(() => fallbackProgrammeOptions),
       ]);
       setSubjects(nextSubjects);
       setProgrammes(nextProgrammes);
       setAcademicYears(nextYears);
       setBranches(branchesRes);
+      setProgrammeOptions(nextProgrammeOptions);
 
       const activeYear = nextYears.find((year) => year.isDefault) ?? nextYears[0];
       if (activeYear) {
@@ -93,9 +128,7 @@ export function AcademicStructurePage() {
 
       if (branchesRes.length > 0) {
         const offeringsPromises = branchesRes.map((branch) =>
-          fetch(`/api/v1/branches/${branch.id}/programmes`).then((r) =>
-            r.ok ? (r.json() as Promise<Programme[]>) : [],
-          )
+          academicStructureApi.getBranchProgrammes(branch.id).catch(() => []),
         );
         const results = await Promise.all(offeringsPromises);
         const map: Record<string, string[]> = {};
@@ -115,9 +148,22 @@ export function AcademicStructurePage() {
     void fetchAcademicData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedStream) return;
+    if (!selectedStream.allowedTracks.includes(coachingTrack)) {
+      setCoachingTrack(selectedStream.allowedTracks[0] ?? "IPE");
+    }
+    const defaultSubjectNames = new Set(selectedStream.defaultSubjects.map((name) => name.toLowerCase()));
+    const matchingSubjectIds = subjects
+      .filter((subject) => defaultSubjectNames.has(subject.name.toLowerCase()))
+      .map((subject) => subject.id);
+    setSelectedSubjectIds(matchingSubjectIds);
+  }, [groupCode, selectedStream, subjects]);
+
   const [isEditingMatrix, setIsEditingMatrix] = useState(false);
 
   const handleToggleMatrixOffering = (branchId: string, programmeId: string) => {
+    if (!canManageAcademicStructure) return;
     setMatrixOfferings((prev) => {
       const current = prev[branchId] || [];
       const updated = current.includes(programmeId)
@@ -128,14 +174,14 @@ export function AcademicStructurePage() {
   };
 
   const handleSaveMatrix = async () => {
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to edit the offering matrix.");
+      return;
+    }
     setIsSavingMatrix(true);
     try {
       const savePromises = branches.map((b) =>
-        fetch(`/api/v1/branches/${b.id}/programmes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ programme_ids: matrixOfferings[b.id] || [] }),
-        })
+        academicStructureApi.assignBranchProgrammes(b.id, matrixOfferings[b.id] || [])
       );
       await Promise.all(savePromises);
       notify("Institution Branch Offering Matrix saved successfully!");
@@ -184,6 +230,10 @@ export function AcademicStructurePage() {
 
   async function handleCreateSection(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to manage sections.");
+      return;
+    }
     if (!sectionModal || !selectedSectionBatchId || !newSectionSuffix.trim()) {
       return;
     }
@@ -227,6 +277,10 @@ export function AcademicStructurePage() {
 
   async function handleCreateAcademicYear(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to manage academic years.");
+      return;
+    }
     if (!yearName.trim()) return;
 
     try {
@@ -255,6 +309,10 @@ export function AcademicStructurePage() {
   }
 
   async function handleSetDefaultYear(id: string, name: string) {
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to manage academic years.");
+      return;
+    }
     try {
       await academicStructureApi.setDefaultAcademicYear(id);
       setAcademicYears((prev) => prev.map((y) => ({ ...y, isDefault: y.id === id })));
@@ -266,6 +324,10 @@ export function AcademicStructurePage() {
 
   async function handleCreateSubject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to manage subjects.");
+      return;
+    }
     if (!subjectName.trim() || !subjectCode.trim()) return;
 
     const created = await academicStructureApi.createSubject({
@@ -288,24 +350,72 @@ export function AcademicStructurePage() {
 
   async function handleCreateGroup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!groupName.trim() || !groupCode.trim()) return;
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to manage course stream groups.");
+      return;
+    }
+    if (!groupCode || !coachingTrack) return;
 
     const created = await academicStructureApi.createProgramme({
-      code: groupCode.trim().toUpperCase(),
-      name: groupName.trim(),
+      streamCode: groupCode,
       coachingTrack,
-      yearLevel,
       subjectIds: selectedSubjectIds
     });
 
     setProgrammes((current) => [...current, created].sort((a, b) => a.code.localeCompare(b.code)));
-    setGroupName("");
-    setGroupCode("");
-    setCoachingTrack("JEE Mains");
-    setYearLevel("First Year");
+    setGroupCode("MPC");
+    setCoachingTrack("IPE");
     setSelectedSubjectIds([]);
     setShowAddGroupModal(false);
-    notify(`Course Stream Group "${created.code}" created.`);
+    notify(`Course Stream Group "${programmeLabel(created)}" created.`);
+  }
+
+  function openEditProgramme(programme: Programme) {
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to edit course stream groups.");
+      return;
+    }
+    setEditingProgramme(programme);
+    setEditSubjectIds(programme.subjectIds || []);
+    setEditStatus("ACTIVE");
+  }
+
+  async function handleSaveProgrammeEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageAcademicStructure) {
+      notify("You do not have permission to edit course stream groups.");
+      return;
+    }
+    if (!editingProgramme) return;
+
+    setIsSavingProgrammeEdit(true);
+    try {
+      const updated = await academicStructureApi.updateProgramme(editingProgramme.id, {
+        subjectIds: editSubjectIds,
+        status: editStatus,
+      });
+      setProgrammes((current) =>
+        current
+          .map((programme) => (programme.id === updated.id ? updated : programme))
+          .filter((programme) => editStatus === "ACTIVE" || programme.id !== updated.id)
+          .sort((a, b) => a.code.localeCompare(b.code)),
+      );
+      setMatrixOfferings((current) => {
+        if (editStatus === "ACTIVE") return current;
+        return Object.fromEntries(
+          Object.entries(current).map(([branchId, programmeIds]) => [
+            branchId,
+            programmeIds.filter((programmeId) => programmeId !== updated.id),
+          ]),
+        );
+      });
+      setEditingProgramme(null);
+      notify(`Course Stream Group "${programmeLabel(updated)}" updated.`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Failed to update course stream group.");
+    } finally {
+      setIsSavingProgrammeEdit(false);
+    }
   }
 
   return (
@@ -341,27 +451,31 @@ export function AcademicStructurePage() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <button
-            type="button"
-            onClick={() => setShowAddYearModal(true)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
-          >
-            <BookOpen className="w-4 h-4" /> Add Academic Year
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddSubjectModal(true)}
-            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
-          >
-            <BookMarked className="w-4 h-4" /> Add Master Subject
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddGroupModal(true)}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
-          >
-            <Layers className="w-4 h-4 text-teal-400" /> Add Course Stream Group
-          </button>
+          {canManageAcademicStructure && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowAddYearModal(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
+              >
+                <BookOpen className="w-4 h-4" /> Add Academic Year
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddSubjectModal(true)}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
+              >
+                <BookMarked className="w-4 h-4" /> Add Master Subject
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddGroupModal(true)}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition"
+              >
+                <Layers className="w-4 h-4 text-teal-400" /> Add Course Stream Group
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -394,7 +508,7 @@ export function AcademicStructurePage() {
                   <span className="px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[10px] font-bold shadow-2xs">
                     Active Term
                   </span>
-                ) : (
+                ) : canManageAcademicStructure ? (
                   <button
                     type="button"
                     onClick={() => handleSetDefaultYear(ay.id, ay.name)}
@@ -402,6 +516,10 @@ export function AcademicStructurePage() {
                   >
                     Set Active
                   </button>
+                ) : (
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold">
+                    Inactive
+                  </span>
                 )}
               </div>
               <div className="mt-3 text-xs text-slate-600 space-y-1">
@@ -434,7 +552,11 @@ export function AcademicStructurePage() {
                     : "bg-slate-100 text-slate-600 border-slate-200"
                 }`}
               >
-                {isEditingMatrix ? "⚡ Edit Mode Active" : "🔒 Read-Only (Click Edit to Modify)"}
+                {isEditingMatrix
+                  ? "Edit Mode Active"
+                  : canManageAcademicStructure
+                    ? "Read-Only (Click Edit to Modify)"
+                    : "Read-Only"}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
@@ -459,13 +581,15 @@ export function AcademicStructurePage() {
             </div>
 
             {!isEditingMatrix ? (
-              <button
-                type="button"
-                onClick={() => setIsEditingMatrix(true)}
-                className="mt-4 sm:mt-0 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition cursor-pointer"
-              >
-                ✏️ Edit Offering Matrix
-              </button>
+              canManageAcademicStructure ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMatrix(true)}
+                  className="mt-4 sm:mt-0 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition cursor-pointer"
+                >
+                  ✏️ Edit Offering Matrix
+                </button>
+              ) : null
             ) : (
               <div className="flex items-center gap-2 mt-4 sm:mt-0">
                 <button
@@ -515,15 +639,25 @@ export function AcademicStructurePage() {
               {programmes.map((prog) => (
                 <tr key={prog.id} className="hover:bg-slate-50/60 transition">
                   <td className="p-3.5">
-                    <span className="font-bold text-slate-900 block">{prog.name}</span>
+                    <span className="font-bold text-slate-900 block">{programmeLabel(prog)}</span>
+                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">{programmeBaseLabel(prog)}</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="font-mono text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-bold">
                         {prog.code}
                       </span>
                       {prog.coachingTrack && (
-                        <span className="text-[10px] text-slate-500 font-medium">({prog.coachingTrack})</span>
+                        <span className="text-[10px] text-slate-500 font-medium">Track: {prog.coachingTrack}</span>
                       )}
                     </div>
+                    {canManageAcademicStructure && (
+                      <button
+                        type="button"
+                        onClick={() => openEditProgramme(prog)}
+                        className="mt-2 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition"
+                      >
+                        Edit Group
+                      </button>
+                    )}
                   </td>
                   <td className="p-3.5">
                     <div className="flex flex-wrap gap-1">
@@ -653,14 +787,22 @@ export function AcademicStructurePage() {
                   <div key={programme.id} className="py-3 space-y-2">
                     <div className="flex justify-between items-start gap-3">
                       <div>
-                        <span className="font-bold text-slate-900">{programme.code} - {programme.name}</span>
+                        <span className="font-bold text-slate-900">{programmeLabel(programme)}</span>
+                        <span className="ml-2 text-[10px] text-slate-500">{programmeBaseLabel(programme)}</span>
                         {programme.coachingTrack && (
                           <span className="ml-2 text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
                             {programme.coachingTrack}
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => openEditProgramme(programme)}
+                          className="ml-2 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 transition"
+                        >
+                          Edit
+                        </button>
                       </div>
-                      <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600 shrink-0">{programme.yearLevel}</span>
+                      <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600 shrink-0">Both Years</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {linkedSubjects.length > 0 ? (
@@ -780,29 +922,21 @@ export function AcademicStructurePage() {
             <form onSubmit={(event) => void handleCreateGroup(event)} className="space-y-3 text-xs">
               <label className="block font-bold text-slate-700">
                 Stream Code *
-                <input
-                  type="text"
+                <select
                   required
-                  placeholder="e.g. MPC or BIPC"
                   value={groupCode}
                   onChange={(event) => setGroupCode(event.target.value)}
                   className="mt-1 w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                />
+                >
+                  {programmeOptions.streams.map((stream) => (
+                    <option key={stream.code} value={stream.code}>
+                      {stream.code}
+                    </option>
+                  ))}
+                </select>
               </label>
 
-              <label className="block font-bold text-slate-700">
-                Stream Name *
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Mathematics, Physics, Chemistry"
-                  value={groupName}
-                  onChange={(event) => setGroupName(event.target.value)}
-                  className="mt-1 w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium outline-none"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="block font-bold text-slate-700">
                   Coaching Track
                   <select
@@ -810,27 +944,38 @@ export function AcademicStructurePage() {
                     onChange={(event) => setCoachingTrack(event.target.value)}
                     className="mt-1 w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
                   >
-                    <option value="JEE Mains">JEE Mains & Advanced</option>
-                    <option value="NEET">NEET Medical Track</option>
-                    <option value="Regular Board">Regular Board Track</option>
-                  </select>
-                </label>
-
-                <label className="block font-bold text-slate-700">
-                  Year Level
-                  <select
-                    value={yearLevel}
-                    onChange={(event) => setYearLevel(event.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
-                  >
-                    <option value="First Year">First Year</option>
-                    <option value="Second Year">Second Year</option>
+                    {allowedTracks.map((track) => (
+                      <option key={track} value={track}>
+                        {track}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
 
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs text-teal-900 space-y-1">
+                <div>
+                  <span className="font-bold">Programme:</span> {generatedProgrammeLabel}
+                </div>
+                <div>
+                  <span className="font-bold">Base Stream:</span> {selectedStream?.label}
+                </div>
+                <div>
+                  <span className="font-bold">Code:</span>{" "}
+                  <span className="font-mono">{generatedProgrammeCode}</span>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Assign Master Subjects</label>
+                {selectedStream && selectedStream.defaultSubjects.some((name) => !subjects.some((subject) => subject.name.toLowerCase() === name.toLowerCase())) && (
+                  <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                    Create missing default subjects first:{" "}
+                    {selectedStream.defaultSubjects
+                      .filter((name) => !subjects.some((subject) => subject.name.toLowerCase() === name.toLowerCase()))
+                      .join(", ")}
+                  </div>
+                )}
                 <div className="space-y-1.5 max-h-40 overflow-y-auto p-2 bg-slate-50 rounded-xl border">
                   {subjects.map((subject) => {
                     const isChecked = selectedSubjectIds.includes(subject.id);
@@ -869,14 +1014,112 @@ export function AcademicStructurePage() {
         </div>
       )}
 
+      {editingProgramme && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Edit Course Stream Group</h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{programmeLabel(editingProgramme)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingProgramme(null)}
+                disabled={isSavingProgrammeEdit}
+                className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
+              <div><span className="font-bold">Code:</span> {editingProgramme.code}</div>
+              <div><span className="font-bold">Base Stream:</span> {programmeBaseLabel(editingProgramme)}</div>
+              <div><span className="font-bold">Track:</span> {editingProgramme.coachingTrack || "-"}</div>
+            </div>
+
+            <form onSubmit={(event) => void handleSaveProgrammeEdit(event)} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Assigned Master Subjects</label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-xl border">
+                  {subjects.map((subject) => {
+                    const isChecked = editSubjectIds.includes(subject.id);
+                    return (
+                      <label key={subject.id} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-white rounded">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              setEditSubjectIds((current) => [...current, subject.id]);
+                            } else {
+                              setEditSubjectIds((current) => current.filter((id) => id !== subject.id));
+                            }
+                          }}
+                        />
+                        <span className="font-semibold text-slate-800">
+                          {subject.name} ({subject.code})
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {subjects.length === 0 && (
+                    <div className="py-4 text-center text-[11px] font-semibold text-slate-400">
+                      Create master subjects before assigning them.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <label className="block font-bold text-slate-700">
+                Status
+                <select
+                  value={editStatus}
+                  onChange={(event) => setEditStatus(event.target.value as "ACTIVE" | "INACTIVE")}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 border rounded-xl font-medium"
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive / Hide from setup</option>
+                </select>
+              </label>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-semibold text-amber-800">
+                Stream code and coaching track are intentionally locked here. If this group already has batches,
+                students, exams, or fees, create a new group instead of changing its identity.
+              </div>
+
+              <div className="flex gap-3 pt-1 font-bold">
+                <button
+                  type="button"
+                  onClick={() => setEditingProgramme(null)}
+                  disabled={isSavingProgrammeEdit}
+                  className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-xl disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProgrammeEdit}
+                  className="flex-1 py-2 bg-teal-600 text-white rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {isSavingProgrammeEdit ? "Saving..." : "Save Group"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {sectionModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start gap-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Manage Sections</h3>
+                <h3 className="text-base font-bold text-slate-900">
+                  {canManageAcademicStructure ? "Manage Sections" : "Sections"}
+                </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  {sectionModal.programme.code} - {sectionModal.programme.name} at{" "}
+                  {programmeLabel(sectionModal.programme)} at{" "}
                   {sectionModal.branch.name}
                 </p>
               </div>
@@ -892,7 +1135,7 @@ export function AcademicStructurePage() {
             <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 text-xs text-teal-900">
               Sections are created inside the selected batch. For example, section suffix{" "}
               <strong>B</strong> creates a clean display section such as{" "}
-              <strong>{sectionModal.programme.code}-B</strong>, while the backend keeps the
+              <strong>{sectionModal.programme.streamCode || sectionModal.programme.code.split("-")[0]}-B</strong>, while the backend keeps the
               year-aware section code for safe routing.
             </div>
 
@@ -941,48 +1184,8 @@ export function AcademicStructurePage() {
               </div>
             )}
 
-            <form onSubmit={(event) => void handleCreateSection(event)} className="border-t border-slate-100 pt-4 space-y-3 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_120px] gap-3">
-                <label className="block font-bold text-slate-700">
-                  Target Batch *
-                  <select
-                    required
-                    value={selectedSectionBatchId}
-                    onChange={(event) => setSelectedSectionBatchId(event.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    {sectionBatches.map((batch) => (
-                      <option key={batch.id} value={batch.id}>
-                        {batch.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block font-bold text-slate-700">
-                  Section *
-                  <input
-                    type="text"
-                    required
-                    maxLength={3}
-                    placeholder="B"
-                    value={newSectionSuffix}
-                    onChange={(event) => setNewSectionSuffix(event.target.value.toUpperCase())}
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </label>
-                <label className="block font-bold text-slate-700">
-                  Capacity
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Optional"
-                    value={newSectionCapacity}
-                    onChange={(event) => setNewSectionCapacity(event.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </label>
-              </div>
-              <div className="flex justify-end gap-3 font-bold">
+            <div className="border-t border-slate-100 pt-4 flex justify-end gap-3 font-bold text-xs">
+              {!canManageAcademicStructure && (
                 <button
                   type="button"
                   onClick={() => setSectionModal(null)}
@@ -990,23 +1193,77 @@ export function AcademicStructurePage() {
                 >
                   Close
                 </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingSection || sectionBatches.length === 0}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isCreatingSection ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" /> Add Section
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+              )}
+            </div>
+
+            {canManageAcademicStructure && (
+              <form onSubmit={(event) => void handleCreateSection(event)} className="border-t border-slate-100 pt-4 space-y-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_120px] gap-3">
+                  <label className="block font-bold text-slate-700">
+                    Target Batch *
+                    <select
+                      required
+                      value={selectedSectionBatchId}
+                      onChange={(event) => setSelectedSectionBatchId(event.target.value)}
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      {sectionBatches.map((batch) => (
+                        <option key={batch.id} value={batch.id}>
+                          {batch.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block font-bold text-slate-700">
+                    Section *
+                    <input
+                      type="text"
+                      required
+                      maxLength={3}
+                      placeholder="B"
+                      value={newSectionSuffix}
+                      onChange={(event) => setNewSectionSuffix(event.target.value.toUpperCase())}
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </label>
+                  <label className="block font-bold text-slate-700">
+                    Capacity
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Optional"
+                      value={newSectionCapacity}
+                      onChange={(event) => setNewSectionCapacity(event.target.value)}
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </label>
+                </div>
+                <div className="flex justify-end gap-3 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSectionModal(null)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingSection || sectionBatches.length === 0}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isCreatingSection ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" /> Add Section
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Search, CheckCircle2, X, RefreshCw, ShieldCheck, AlertCircle, Lock } from 'lucide-react';
+import { apiGet, apiPost } from '../../../api/client/apiClient';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 
 interface UserItem {
@@ -14,7 +15,8 @@ interface UserItem {
 }
 
 export const UsersPage: React.FC = () => {
-  const { activeContext, availableContexts } = useAuth();
+  const auth = useAuth();
+  const { activeContext, availableContexts } = auth;
   const [users, setUsers] = useState<UserItem[]>([]);
   const [availableBranches, setAvailableBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -25,6 +27,7 @@ export const UsersPage: React.FC = () => {
   const isPlatformAdmin = activeContext?.scope_type === 'PLATFORM';
   const isDean = activeContext?.role_codes.includes('INSTITUTION_ADMIN') || activeContext?.scope_type === 'TENANT';
   const isPrincipal = activeContext?.role_codes.includes('BRANCH_ADMIN') && activeContext?.scope_type === 'BRANCH';
+  const canCreateUser = auth.hasPermission('user.create');
 
   const userBranchName =
     availableContexts.find((c) => c.assignment_id === activeContext?.assignment_id)?.branch?.name ||
@@ -56,11 +59,8 @@ export const UsersPage: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
-      }
+      const data = await apiGet<UserItem[]>('/users');
+      setUsers(data);
     } catch (err) {
       console.error('Failed to fetch users:', err);
     } finally {
@@ -70,13 +70,10 @@ export const UsersPage: React.FC = () => {
 
   const fetchBranches = async () => {
     try {
-      const res = await fetch('/api/v1/branches');
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableBranches(data.map((b: any) => ({ id: b.id, name: b.name || b.displayName })));
-        if (data.length > 0) {
-          setBranch(data[0].name || data[0].displayName);
-        }
+      const data = await apiGet<any[]>('/branches');
+      setAvailableBranches(data.map((b: any) => ({ id: b.id, name: b.name || b.displayName })));
+      if (data.length > 0) {
+        setBranch(data[0].name || data[0].displayName);
       }
     } catch (err) {
       console.error('Failed to fetch branches for selection:', err);
@@ -91,6 +88,10 @@ export const UsersPage: React.FC = () => {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
+    if (!canCreateUser) {
+      setModalError('You do not have permission to create users.');
+      return;
+    }
 
     if (!fullName.trim()) {
       setModalError('Full Name is required on Tab 1 (User Profile)!');
@@ -106,36 +107,25 @@ export const UsersPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: fullName.trim(),
-          email: email.trim(),
-          mobile: mobile.trim() || '+91 98765 00000',
-          role,
-          branch,
-        }),
+      const newUser = await apiPost<UserItem>('/users', {
+        name: fullName.trim(),
+        email: email.trim(),
+        mobile: mobile.trim() || '+91 98765 00000',
+        role,
+        branch,
       });
 
-      if (res.ok) {
-        const newUser = await res.json();
-        setShowAddModal(false);
-        setFullName('');
-        setEmail('');
-        setMobile('');
-        setModalError(null);
-        setNotification(`User "${newUser.name}" created with role ${newUser.role}!`);
-        setTimeout(() => setNotification(null), 4000);
-        // Re-fetch the full list from server so role/branch are shown correctly
-        await fetchUsers();
-      } else {
-        const errText = await res.text();
-        setModalError(`Failed to create user: ${errText || res.statusText}`);
-      }
+      setShowAddModal(false);
+      setFullName('');
+      setEmail('');
+      setMobile('');
+      setModalError(null);
+      setNotification(`User "${newUser.name}" created with role ${newUser.role}!`);
+      setTimeout(() => setNotification(null), 4000);
+      await fetchUsers();
     } catch (err: any) {
       console.error('Failed to add user:', err);
-      setModalError(`Connection error: ${err.message || 'Server error'}`);
+      setModalError(err.message || 'Failed to create user.');
     } finally {
       setSubmitting(false);
     }
@@ -202,15 +192,17 @@ export const UsersPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => {
-              setModalError(null);
-              setShowAddModal(true);
-            }}
-            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
-          >
-            <UserPlus className="w-4 h-4" /> Create User Account
-          </button>
+          {canCreateUser && (
+            <button
+              onClick={() => {
+                setModalError(null);
+                setShowAddModal(true);
+              }}
+              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+            >
+              <UserPlus className="w-4 h-4" /> Create User Account
+            </button>
+          )}
         </div>
       </div>
 
