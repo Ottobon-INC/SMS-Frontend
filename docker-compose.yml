@@ -1,0 +1,13 @@
+name: student-management-frontend
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8920/api/v1}
+        VITE_APP_ENV: ${VITE_APP_ENV:-production}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_HOST_PORT:-8921}:80"
