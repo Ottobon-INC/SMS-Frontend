@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { env } from '../../../app/config/env';
 import { whatsappSimulatorApi } from '../api/whatsappSimulatorApi';
 import { SimulatorMessage } from '../types';
 import { MessageSquare, Trash2, Send, CheckCheck, Search, Phone, Video, MoreVertical, RefreshCw } from 'lucide-react';
@@ -36,8 +37,7 @@ export const WhatsAppSimulatorPage: React.FC = () => {
   useEffect(() => {
     fetchHistory();
 
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-    const sseUrl = `${backendUrl}/whatsapp-simulator/stream`;
+    const sseUrl = `${env.apiBaseUrl}/whatsapp-simulator/stream`;
 
     const eventSource = new EventSource(sseUrl);
 
