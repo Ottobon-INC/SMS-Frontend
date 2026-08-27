@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Branch, Exam, ExamSubject, StudentExamRecord } from '../types';
-import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2, Lock } from 'lucide-react';
+import { Save, ArrowLeft, CheckCircle2, X, FileText, Check, Loader2, Lock, Unlock } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 import { apiGet } from '../../../api/client/apiClient';
 
@@ -73,6 +73,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
   const [highlightUnmarked, setHighlightUnmarked] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [previewStudent, setPreviewStudent] = useState<StudentItem | null>(null);
 
   // Unsaved Changes Navigation Guard state
@@ -344,7 +345,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
       const validEnrollmentId = st.enrollmentId || st.id;
       if (existing) {
         const cleanEnr = existing.enrollmentId && !existing.enrollmentId.startsWith('enr-') ? existing.enrollmentId : validEnrollmentId;
-        return { ...existing, enrollmentId: cleanEnr, status: 'DRAFT' as const };
+        return { ...existing, sectionId: selectedSectionId, enrollmentId: cleanEnr, status: 'DRAFT' as const };
       }
       return {
         id: `${selectedExamId}-${st.id}`,
@@ -391,7 +392,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
       const validEnrollmentId = st.enrollmentId || st.id;
       if (existing) {
         const cleanEnr = existing.enrollmentId && !existing.enrollmentId.startsWith('enr-') ? existing.enrollmentId : validEnrollmentId;
-        return { ...existing, enrollmentId: cleanEnr, status: 'SUBMITTED' as const };
+        return { ...existing, sectionId: selectedSectionId, enrollmentId: cleanEnr, status: 'SUBMITTED' as const };
       }
       return {
         id: `${selectedExamId}-${st.id}`,
@@ -420,6 +421,39 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const handleUnlockSection = async () => {
+    if (!selectedSectionId || sectionStudents.length === 0) return;
+    setIsUnlocking(true);
+    const list = sectionStudents.map((st) => {
+      const existing = recordsMap[st.id];
+      const validEnrollmentId = st.enrollmentId || st.id;
+      if (existing) {
+        const cleanEnr = existing.enrollmentId && !existing.enrollmentId.startsWith('enr-') ? existing.enrollmentId : validEnrollmentId;
+        return { ...existing, sectionId: selectedSectionId, enrollmentId: cleanEnr, status: 'DRAFT' as const };
+      }
+      return {
+        id: `${selectedExamId}-${st.id}`,
+        examId: selectedExamId,
+        enrollmentId: validEnrollmentId,
+        studentId: st.id,
+        sectionId: selectedSectionId,
+        subjectMarks: {},
+        status: 'DRAFT' as const,
+        enteredBy: 'Staff User',
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    await examinationsApi.bulkSaveStudentExamRecords(selectedExamId, list);
+    setIsDirty(false);
+    const currentSec = sections.find((s) => s.id === selectedSectionId);
+    const secName = currentSec ? currentSec.name : 'Selected Section';
+    setNotification(`🔓 Section ${secName} unlocked! All staff, Principal, and Dean can now edit marks.`);
+    setIsUnlocking(false);
+    await new Promise((r) => setTimeout(r, 250));
+    await reloadSections();
+    setTimeout(() => setNotification(null), 4000);
+  };
+
 
 
   // Live Summary Stats
@@ -443,7 +477,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
   
   const activeSec = sections.find((s) => s.id === selectedSectionId);
   const activeSectionStatus = activeSec?.status || 'DRAFT';
-  const isLockedForTeacher = !canPublish && 
+  const isLockedForTeacher = 
     (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED') &&
     selectedExam?.status !== 'RETURNED_FOR_CORRECTION';
 
@@ -460,63 +494,87 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Class Subject Marks Matrix Entry</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Input assessment scores with 1-click status pills ([A] Absent, [E] Exempted) and submit for review.
-          </p>
-        </div>
-
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Exams
-          </button>
-        )}
-      </div>
-
-      {/* PROMINENT ACTIVE ASSESSMENT HEADER BANNER */}
-      {selectedExam && (
-        <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-indigo-900 text-white p-5 rounded-3xl border border-teal-800 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Rich Aesthetics Header Card & Campus Switcher */}
+      <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-indigo-50/60 p-5 rounded-3xl border border-teal-200/80 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-teal-500/20 border border-teal-400/30 text-teal-300 text-[10px] font-extrabold rounded-full uppercase tracking-wider">
-                Active Assessment
-              </span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                selectedExam.status === 'PUBLISHED' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40' :
-                selectedExam.status === 'SUBMITTED' ? 'bg-blue-500/30 text-blue-300 border border-blue-400/40' :
-                'bg-amber-500/30 text-amber-300 border border-amber-400/40'
+            <div className="flex items-center gap-2 text-xs text-teal-800 font-semibold">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="hover:text-teal-950 flex items-center gap-1 font-bold transition cursor-pointer bg-white/80 hover:bg-white px-2.5 py-1 rounded-xl border border-teal-200/60 shadow-2xs"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-teal-700" />
+                  <span>Exams Dashboard</span>
+                </button>
+              )}
+              <span>/</span>
+              <span className="text-teal-700 font-medium">Class Subject Marks Matrix Entry</span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5 pt-0.5">
+              <span>{selectedExam?.name || 'Assessment Marks Entry'}</span>
+              {selectedExam?.type && (
+                <span className="text-sm font-bold text-teal-800 bg-teal-100/70 px-2.5 py-0.5 rounded-xl border border-teal-200">
+                  {selectedExam.type}
+                </span>
+              )}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedExam && (
+              <span className={`text-xs px-3 py-1 rounded-full font-black uppercase tracking-wide border shadow-2xs ${
+                selectedExam.status === 'PUBLISHED' ? 'bg-emerald-600 text-white border-emerald-700' :
+                selectedExam.status === 'SUBMITTED' ? 'bg-blue-600 text-white border-blue-700' :
+                'bg-amber-500 text-white border-amber-600'
               }`}>
                 {selectedExam.status}
               </span>
-            </div>
-            <h2 className="text-xl font-black text-white flex items-center gap-2">
-              📌 {selectedExam.name} <span className="text-sm font-semibold text-slate-300">({selectedExam.type})</span>
-            </h2>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 pt-1">
-              <span className="flex items-center gap-1 font-semibold text-teal-200">
-                📍 Scope: {(selectedExam.scope || (selectedExam as any).scope) === 'SINGLE_BRANCH' ? 'Single Campus' : (selectedExam.scope || (selectedExam as any).scope) === 'SELECTED_BRANCHES' ? 'Multi-Campus' : 'All-Institution'}
-              </span>
-              <span>•</span>
-              <span>🏫 Target Branch: <strong className="text-white">
-                {branches.find((b) => b.id === (selectedExam.branchId || (selectedExam as any).branch_id || selectedBranchId))?.name || 'All Campuses'}
-              </strong></span>
-              {selectedExam.examDate && (
-                <>
-                  <span>•</span>
-                  <span>📅 Exam Date: <strong className="text-teal-300">{selectedExam.examDate}</strong></span>
-                </>
+            )}
+          </div>
+        </div>
+
+        {selectedExam && (
+          <div className="pt-3 border-t border-teal-200/60 flex flex-wrap items-center gap-4 text-xs text-slate-700 font-medium">
+            <span className="flex items-center gap-1.5 font-bold text-slate-800 bg-white/80 px-2.5 py-1 rounded-xl border border-slate-200/80">
+              📍 Scope: <strong className="text-teal-900 font-bold">{(selectedExam.scope || (selectedExam as any).scope) === 'SINGLE_BRANCH' ? 'Single Campus' : (selectedExam.scope || (selectedExam as any).scope) === 'SELECTED_BRANCHES' ? 'Multi-Campus' : 'All-Institution'}</strong>
+            </span>
+
+            <span className="text-teal-300">•</span>
+
+            {/* Interactive Campus Switcher for Dean / Multi-Branch Viewers */}
+            <div className="flex items-center gap-1.5 font-bold text-teal-900 bg-white px-3 py-1 rounded-xl border border-teal-300 shadow-2xs">
+              <span>🏫 Campus Branch:</span>
+              {branches.length > 1 ? (
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="bg-teal-50 border border-teal-300 rounded-lg px-2.5 py-0.5 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong className="text-slate-900 font-black">
+                  {branches.find((b) => b.id === (selectedBranchId || selectedExam.branchId))?.name || 'Main Campus'}
+                </strong>
               )}
             </div>
 
+            {selectedExam.examDate && (
+              <>
+                <span className="text-teal-300">•</span>
+                <span className="flex items-center gap-1 font-semibold text-slate-800 bg-white/80 px-2.5 py-1 rounded-xl border border-slate-200/80">
+                  📅 Exam Date: <strong className="text-teal-700 font-bold">{selectedExam.examDate}</strong>
+                </span>
+              </>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
 
       {/* Section Overview Cards */}
@@ -694,97 +752,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
         )}
       </div>
 
-      {/* Selector & Action Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {isDean ? (
-            <div>
-              <label htmlFor="select-branch-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                Select Campus Branch <span className="text-teal-600 font-bold">(Dean Overview)</span>
-              </label>
-              <select
-                id="select-branch-input"
-                name="selectedBranchId"
-                aria-label="Select Campus Branch"
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                {allowedBranches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Assigned Campus</label>
-              <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <span>🏫 {branches.find((b) => b.id === selectedBranchId)?.name || 'Assigned Campus'}</span>
-                <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
-              </div>
-            </div>
-          )}
-
-
-
-
-          <div>
-            <label htmlFor="select-section-input" className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Select Class Section</label>
-            <select
-              id="select-section-input"
-              name="selectedSectionId"
-              aria-label="Select Class Section"
-              value={selectedSectionId}
-              onChange={(e) => handleSectionSwitchAttempt(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold outline-none"
-            >
-              {sections.map((sec) => {
-                const yLvl = sec.batchYearLevel === '2' || (sec.batchName && sec.batchName.toLowerCase().includes('second')) ? '2nd Year' : '1st Year';
-                return (
-                  <option key={sec.id} value={sec.id}>
-                    {sec.name} ({yLvl} - {sec.status ?? 'PENDING'})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {isLockedForTeacher && (
-            <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-amber-600" /> {(canPublish) ? 'Read-Only (Locked & Saved)' : 'Read-Only (Submitted to Principal)'}
-            </span>
-          )}
-
-          {isDirty && !isLockedForTeacher && (
-            <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-              ⚠️ Unsaved Changes
-            </span>
-          )}
-          <button
-            onClick={handleSaveDraft}
-            disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
-            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSavingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-slate-500" />}
-            <span>Save Draft</span>
-          </button>
-
-          <button
-            onClick={handleSubmitForReview}
-            disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            <span>{(canPublish) ? 'Submit Class Marks' : 'Submit to Principal'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Live Metrics */}
+      {/* Live Metrics Header Bar */}
       <div className="grid grid-cols-3 gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs text-xs">
         <div className="p-3 bg-slate-50 rounded-xl text-center">
           <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Total Enrolled</span>
@@ -801,7 +769,7 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
       </div>
 
       {/* Matrix Grid */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4 overflow-x-auto">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4 overflow-x-auto pb-16">
         <table className="w-full text-left text-xs text-slate-700">
           <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
@@ -857,13 +825,14 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
                             max={sub.maximumMarks}
                             placeholder="Score"
                             value={val !== undefined && val >= 0 ? val : ''}
+                            onWheel={(e) => e.currentTarget.blur()}
                             onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
                             onChange={(e) => {
                               const v = e.target.value === '' ? -99 : Number(e.target.value);
                               if (v >= 0) handleMarkInput(st.id, sub.subjectId || sub.id, v, sub.maximumMarks);
                             }}
                             disabled={isLockedForTeacher || isAbsent || isExempt}
-                            className={`w-20 px-2.5 py-1.5 text-center text-xs font-mono font-bold rounded-xl border outline-none transition disabled:opacity-75 ${
+                            className={`w-20 px-2.5 py-1.5 text-center text-xs font-mono font-bold rounded-xl border outline-none transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-75 ${
                               isAbsent
                                 ? 'bg-amber-100 border-amber-300 text-amber-900 placeholder:text-amber-900 font-extrabold'
                                 : isExempt
@@ -923,6 +892,54 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* STICKY FLOATING ACTION BAR FOR MARKS SUBMISSION */}
+      <div className="fixed bottom-5 right-8 z-30 bg-white/95 backdrop-blur-md p-3 px-4 rounded-2xl border border-slate-200 shadow-2xl flex items-center gap-3">
+        {isLockedForTeacher && (
+          <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-amber-600" /> {canPublish ? 'Read-Only (Locked & Saved)' : 'Read-Only (Submitted to Principal)'}
+          </span>
+        )}
+
+        {canPublish && (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED') && (
+          <button
+            type="button"
+            onClick={handleUnlockSection}
+            disabled={isUnlocking}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition active:scale-95"
+            title="Re-open section marks so Office Staff, Teachers, and Principals can edit"
+          >
+            {isUnlocking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+            <span>Unlock Section for Editing</span>
+          </button>
+        )}
+
+        {isDirty && !isLockedForTeacher && (
+          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200 animate-pulse">
+            ⚠️ Unsaved Changes
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={handleSaveDraft}
+          disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
+          className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSavingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-slate-500" />}
+          <span>Save Draft</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSubmitForReview}
+          disabled={isSavingDraft || isSubmitting || isLockedForTeacher}
+          className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition"
+        >
+          {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          <span>{canPublish ? 'Submit Class Marks' : 'Submit to Principal'}</span>
+        </button>
       </div>
 
       {/* REPORT CARD MODAL */}

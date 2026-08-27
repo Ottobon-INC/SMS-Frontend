@@ -118,6 +118,16 @@ export function FeesPage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
 
+  // Fee Reminder Modal States
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderPreview, setReminderPreview] = useState<any>(null);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderDispatching, setReminderDispatching] = useState(false);
+  const [dueDateCutoff, setDueDateCutoff] = useState("");
+  const [forceResend, setForceResend] = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const [reminderSuccess, setReminderSuccess] = useState<string | null>(null);
+
   const canSetupFeeAccount = auth.hasPermission("fee.basic_assign");
   const canRecordPayment = auth.hasPermission("fee.payment_record");
 
@@ -131,6 +141,49 @@ export function FeesPage() {
       setAccounts([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadReminderPreview(cutoff?: string, force?: boolean) {
+    setReminderLoading(true);
+    setReminderError(null);
+    try {
+      const payload: any = {};
+      if (cutoff) payload.due_date_cutoff = cutoff;
+      if (force) payload.force_resend = true;
+      const res = await feesApi.previewReminders(payload);
+      setReminderPreview(res);
+    } catch (exc) {
+      setReminderError(exc instanceof Error ? exc.message : "Failed to load reminder preview.");
+    } finally {
+      setReminderLoading(false);
+    }
+  }
+
+  function openReminderModal() {
+    setShowReminderModal(true);
+    setReminderSuccess(null);
+    void loadReminderPreview(dueDateCutoff, forceResend);
+  }
+
+  async function dispatchReminders() {
+    if (reminderDispatching) return;
+    setReminderDispatching(true);
+    setReminderError(null);
+    try {
+      const payload: any = {};
+      if (dueDateCutoff) payload.due_date_cutoff = dueDateCutoff;
+      if (forceResend) payload.force_resend = true;
+      const res = await feesApi.dispatchReminders(payload);
+      setReminderSuccess(`Dispatched ${res.queued_count} WhatsApp fee reminders successfully!`);
+      setTimeout(() => {
+        setShowReminderModal(false);
+        setReminderSuccess(null);
+      }, 2500);
+    } catch (exc) {
+      setReminderError(exc instanceof Error ? exc.message : "Failed to dispatch fee reminders.");
+    } finally {
+      setReminderDispatching(false);
     }
   }
 
@@ -366,6 +419,14 @@ export function FeesPage() {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => openReminderModal()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700 active:scale-95 cursor-pointer"
+          >
+            <WalletCards className="h-4 w-4" />
+            📲 Send Fee Reminders
           </button>
           {canSetupFeeAccount && (
             <button
@@ -953,6 +1014,138 @@ export function FeesPage() {
                 className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Reminder Dispatch Modal */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-950 flex items-center gap-2">
+                  <span>📲 Send WhatsApp Fee Due Reminders</span>
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Preview targeted students, skipped paid accounts, and live WhatsApp template message.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReminderModal(false)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {reminderError && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800">
+                <AlertCircle className="h-4 w-4" />
+                {reminderError}
+              </div>
+            )}
+
+            {reminderSuccess && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 animate-fade-in">
+                <span className="text-base">✅</span>
+                {reminderSuccess}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Due Date Cutoff (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={dueDateCutoff}
+                  onChange={(e) => {
+                    setDueDateCutoff(e.target.value);
+                    void loadReminderPreview(e.target.value);
+                  }}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              {/* Preview Metrics Breakdown */}
+              {reminderLoading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-xs font-semibold text-slate-400">
+                  <RefreshCw className="h-5 w-5 animate-spin text-emerald-600" />
+                  Calculating eligible fee accounts...
+                </div>
+              ) : reminderPreview ? (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Targeted</p>
+                      <p className="mt-1 text-lg font-bold text-emerald-700">{reminderPreview.targeted_count}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reminded Today</p>
+                      <p className="mt-1 text-lg font-bold text-amber-700">{reminderPreview.skipped_reminded_today_count}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Paid (Skipped)</p>
+                      <p className="mt-1 text-lg font-bold text-slate-500">{reminderPreview.skipped_paid_count}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Overdue</p>
+                      <p className="mt-1 text-lg font-bold text-rose-700">₹{reminderPreview.total_overdue_amount?.toLocaleString("en-IN")}</p>
+                    </div>
+                  </div>
+
+                  {/* Live WhatsApp Chat Bubble Preview */}
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                        <span>💬 Live WhatsApp Template Message</span>
+                        <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[9px]">fee_due_reminder_v1</span>
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600">Meta Compliant</span>
+                    </div>
+                    <div className="mt-2.5 rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+                      <p className="text-xs text-slate-800 leading-relaxed font-sans">
+                        Dear <strong className="text-slate-950">{reminderPreview.eligible_students?.[0]?.guardian_name ?? "-"}</strong>,<br /><br />
+                        A gentle reminder that fee dues for <strong className="text-slate-950">{reminderPreview.eligible_students?.[0]?.student_name ?? "-"}</strong> (Adm No: <span className="font-mono text-slate-600">{reminderPreview.eligible_students?.[0]?.admission_number ?? "-"}</span>, Session: <strong className="text-slate-950">{reminderPreview.eligible_students?.[0]?.academic_year_name ?? "-"}</strong>) of <strong className="text-rose-700">Rs. {reminderPreview.eligible_students?.[0]?.outstanding_amount ? reminderPreview.eligible_students[0].outstanding_amount.toLocaleString("en-IN") : "-"}</strong> are due on <strong className="text-slate-950">{reminderPreview.eligible_students?.[0]?.due_date ?? "-"}</strong>.<br /><br />
+                        Please clear the pending fee dues at your earliest convenience. Please ignore if already paid.<br />
+                        - <strong className="text-slate-950">{reminderPreview.eligible_students?.[0]?.sender_signature ?? "-"}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowReminderModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={reminderDispatching || reminderLoading || (reminderPreview && reminderPreview.targeted_count === 0)}
+                onClick={() => void dispatchReminders()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {reminderDispatching ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin text-white" />
+                    <span>⏳ Dispatching Reminders...</span>
+                  </>
+                ) : (
+                  <>
+                    <WalletCards className="h-4 w-4" />
+                    <span>Confirm & Dispatch WhatsApp Reminders ({reminderPreview?.targeted_count || 0})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

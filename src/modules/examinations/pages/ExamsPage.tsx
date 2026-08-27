@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, Subject, Programme, Branch } from '../types';
-import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle, Loader2 } from 'lucide-react';
+import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 import { useNotificationProgress } from '../../notifications/hooks/useNotificationProgress';
 
 function ExamDispatchPill({ examId }: { examId: string }) {
-  const { progress } = useNotificationProgress(examId);
-  if (!progress || progress.total_notifications === 0) return null;
+  const auth = useAuth();
+  const canViewNotifs = auth.hasPermission('notification.view');
+  const { progress } = useNotificationProgress(canViewNotifs ? examId : undefined);
+  if (!canViewNotifs || !progress || progress.total_notifications === 0) return null;
 
   if (progress.is_ongoing) {
     return (
@@ -42,6 +44,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   onNavigateToMarksEntry,
 }) => {
 
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -80,10 +83,8 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
     { id: '33333333-3333-3333-3333-333333333333', name: 'Visakhapatnam Campus', code: 'VIZAG' },
   ]);
 
-  const [programmes, setProgrammes] = useState<Programme[]>([
-    { id: '55555555-5555-5555-5555-555555555555', code: 'MPC', name: 'Maths, Physics, Chemistry', yearLevel: 'First Year', subjectIds: ['77777777-7777-7777-7777-777777777771', '77777777-7777-7777-7777-777777777772', '77777777-7777-7777-7777-777777777773', '77777777-7777-7777-7777-777777777774', '77777777-7777-7777-7777-777777777775'] },
-    { id: '66666666-6666-6666-6666-666666666666', code: 'BiPC', name: 'Biology, Physics, Chemistry', yearLevel: 'First Year', subjectIds: ['77777777-7777-7777-7777-777777777771', '77777777-7777-7777-7777-777777777772', '77777777-7777-7777-7777-777777777774', '77777777-7777-7777-7777-777777777775'] },
-  ]);
+  const [programmes, setProgrammes] = useState<Programme[]>([]);
+  const [loadingProgrammes, setLoadingProgrammes] = useState<boolean>(true);
 
   const [allSubjects, setAllSubjects] = useState<Subject[]>([
     { id: '77777777-7777-7777-7777-777777777771', code: 'ENG-101', name: 'English 1', maxMarks: 100, passMarks: 35 },
@@ -106,12 +107,6 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
           setSelectedBranchId((current) => (current && b.some((branch) => branch.id === current)) ? current : (userBranchId && b.some(branch => branch.id === userBranchId) ? userBranchId : b[0].id));
         }
         setSelectedBranchIds((current) => current.length > 0 && current.every((id) => b.some((branch) => branch.id === id)) ? current : [b[0].id]);
-      }
-    });
-    examinationsApi.getProgrammes().then((p) => {
-      if (p && p.length > 0) {
-        setProgrammes(p);
-        setSelectedProgrammeIds((current) => current.length > 0 && p.some((programme) => programme.id === current[0]) ? current : [p[0].id]);
       }
     });
     examinationsApi.getSubjects().then((s) => {
@@ -142,9 +137,9 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   const [examType, setExamType] = useState('Quarterly Exam');
   const [examDate, setExamDate] = useState('2026-08-20');
   const [examScope, setExamScope] = useState<'ALL_BRANCHES' | 'SELECTED_BRANCHES' | 'SINGLE_BRANCH'>('SINGLE_BRANCH');
-  const [selectedBranchId, setSelectedBranchId] = useState(branches[0]?.id || '11111111-1111-1111-1111-111111111111');
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([branches[0]?.id || '11111111-1111-1111-1111-111111111111']);
-  const [selectedProgrammeIds, setSelectedProgrammeIds] = useState<string[]>([programmes[0]?.id || '55555555-5555-5555-5555-555555555555']);
+  const [selectedBranchId, setSelectedBranchId] = useState(userBranchId || branches[0]?.id || '11111111-1111-1111-1111-111111111111');
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([userBranchId || branches[0]?.id || '11111111-1111-1111-1111-111111111111']);
+  const [selectedProgrammeIds, setSelectedProgrammeIds] = useState<string[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
   const [overlapError, setOverlapError] = useState<string | null>(null);
 
@@ -155,17 +150,24 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   useEffect(() => {
     let fetchPromises: Promise<Programme[]>[];
 
+    setLoadingProgrammes(true);
     if (examScope === 'ALL_BRANCHES') {
       fetchPromises = [
         examinationsApi.getBranchProgrammes('ALL', academicYearId || undefined),
       ];
     } else if (examScope === 'SELECTED_BRANCHES') {
-      if (selectedBranchIds.length === 0) return;
+      if (selectedBranchIds.length === 0) {
+        setLoadingProgrammes(false);
+        return;
+      }
       fetchPromises = selectedBranchIds.map((bId) =>
         examinationsApi.getBranchProgrammes(bId, academicYearId || undefined)
       );
     } else {
-      if (!selectedBranchId) return;
+      if (!selectedBranchId) {
+        setLoadingProgrammes(false);
+        return;
+      }
       fetchPromises = [
         examinationsApi.getBranchProgrammes(selectedBranchId, academicYearId || undefined),
       ];
@@ -193,8 +195,12 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
             return valid.length > 0 ? valid : [branchProgs[0].id];
           });
         }
+        setLoadingProgrammes(false);
       })
-      .catch((err) => console.error('Failed to load branch-scoped programmes:', err));
+      .catch((err) => {
+        console.error('Failed to load branch-scoped programmes:', err);
+        setLoadingProgrammes(false);
+      });
   }, [examScope, selectedBranchId, selectedBranchIds, academicYearId]);
 
   // Simulated Dean role
@@ -223,6 +229,58 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   };
 
   const availableProgrammeSubjects = getSubjectsForSelectedProgrammes();
+
+  const firstYearProgrammes = useMemo(() => {
+    return programmes.filter((p: Programme) => {
+      const yl = (p.yearLevel || (p as any).year_level || '').toLowerCase();
+      const name = (p.name || p.code || '').toLowerCase();
+      return yl.includes('first') || yl.includes('1st') || name.includes('1st') || name.includes('first');
+    });
+  }, [programmes]);
+
+  const secondYearProgrammes = useMemo(() => {
+    return programmes.filter((p: Programme) => {
+      const yl = (p.yearLevel || (p as any).year_level || '').toLowerCase();
+      const name = (p.name || p.code || '').toLowerCase();
+      return yl.includes('second') || yl.includes('2nd') || name.includes('2nd') || name.includes('second');
+    });
+  }, [programmes]);
+
+  const otherProgrammes = useMemo(() => {
+    return programmes.filter((p: Programme) => !firstYearProgrammes.includes(p) && !secondYearProgrammes.includes(p));
+  }, [programmes, firstYearProgrammes, secondYearProgrammes]);
+
+  const firstYearSelectedCount = useMemo(() => {
+    return firstYearProgrammes.filter((p: Programme) => selectedProgrammeIds.includes(p.id)).length;
+  }, [firstYearProgrammes, selectedProgrammeIds]);
+
+  const secondYearSelectedCount = useMemo(() => {
+    return secondYearProgrammes.filter((p: Programme) => selectedProgrammeIds.includes(p.id)).length;
+  }, [secondYearProgrammes, selectedProgrammeIds]);
+
+  const handleSelectAllFirstYear = () => {
+    const fyIds = firstYearProgrammes.map((p: Programme) => p.id);
+    const allSelected = fyIds.length > 0 && fyIds.every((id: string) => selectedProgrammeIds.includes(id));
+    if (allSelected) {
+      const remaining = selectedProgrammeIds.filter((id: string) => !fyIds.includes(id));
+      setSelectedProgrammeIds(remaining.length > 0 ? remaining : selectedProgrammeIds);
+    } else {
+      const newSet = new Set([...selectedProgrammeIds, ...fyIds]);
+      setSelectedProgrammeIds(Array.from(newSet));
+    }
+  };
+
+  const handleSelectAllSecondYear = () => {
+    const syIds = secondYearProgrammes.map((p: Programme) => p.id);
+    const allSelected = syIds.length > 0 && syIds.every((id: string) => selectedProgrammeIds.includes(id));
+    if (allSelected) {
+      const remaining = selectedProgrammeIds.filter((id: string) => !syIds.includes(id));
+      setSelectedProgrammeIds(remaining.length > 0 ? remaining : selectedProgrammeIds);
+    } else {
+      const newSet = new Set([...selectedProgrammeIds, ...syIds]);
+      setSelectedProgrammeIds(Array.from(newSet));
+    }
+  };
 
   const handleProgrammeToggle = (progId: string) => {
     let nextIds: string[];
@@ -324,6 +382,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
       const createdExam = await examinationsApi.createExam(newExamPayload, examSubjects);
       setExamName('');
+      setViewMode('list');
       setShowCreateExamModal(false);
       await loadExams();
 
@@ -391,6 +450,459 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
     setTimeout(() => setNotification(null), 5000);
   };
 
+  if (viewMode === 'create') {
+    return (
+      <div className="space-y-6 p-6 max-w-6xl mx-auto pb-24">
+        {/* Header Breadcrumbs Card */}
+        <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-indigo-50/60 p-6 rounded-3xl border border-teal-200/80 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('list');
+                  setOverlapError(null);
+                }}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              >
+                <ArrowLeft className="w-4 h-4 text-teal-600" />
+                <span>Back to Examinations</span>
+              </button>
+              <span className="text-slate-400 text-xs">/</span>
+              <span className="text-xs font-bold text-teal-800 bg-teal-100/80 px-2.5 py-0.5 rounded-full">
+                Setup New Exam
+              </span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight pt-1">Create New Assessment</h1>
+            <p className="text-xs text-slate-600 font-medium">
+              Configure audience scopes, schedule, target year-level batches, and custom subject max & pass mark overrides.
+            </p>
+          </div>
+        </div>
+
+        {overlapError && (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-3 shadow-xs">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span>{overlapError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleCreateExam} className="space-y-6">
+          {/* CARD 1: GENERAL EXAM DETAILS & CAMPUS SCOPE */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <div className="p-2 bg-teal-50 text-teal-700 rounded-xl">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">1. Basic Details & Campus Scope</h2>
+                <p className="text-[11px] text-slate-500">Specify assessment title, academic year, schedule, and institution branch scope.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Assessment / Exam Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Unit Test 1 or Mid-Term Exam 2026"
+                  value={examName}
+                  onChange={(e) => setExamName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:ring-2 focus:ring-teal-500 outline-none transition"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Target Academic Year *</label>
+                <select
+                  value={academicYearId}
+                  onChange={(e) => setAcademicYearId(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {academicYears.map((ay) => (
+                    <option key={ay.id} value={ay.id}>
+                      {ay.name} ({ay.code}) {ay.isDefault ? '— Active Term' : ''}
+                    </option>
+                  ))}
+                  {academicYears.length === 0 && (
+                    <option value="2026-2027">2026–2027 Academic Year</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Exam Type</label>
+                <select
+                  value={examType}
+                  onChange={(e) => setExamType(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="Unit Test">Unit Test</option>
+                  <option value="Monthly Test">Monthly Test</option>
+                  <option value="Mid-Term">Mid-Term</option>
+                  <option value="Quarterly Exam">Quarterly Exam</option>
+                  <option value="Grand Test">Grand Test</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Exam Date (Lock Schedule)</label>
+                <input
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => {
+                    setExamDate(e.target.value);
+                    setOverlapError(null);
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Audience Scope */}
+            <div className="pt-2">
+              <label className="block font-bold text-slate-700 mb-2">Audience Scope & Campuses</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExamScope('SINGLE_BRANCH')}
+                  className={`px-4 py-2 rounded-xl font-bold text-xs border cursor-pointer transition ${
+                    examScope === 'SINGLE_BRANCH'
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  Single Campus
+                </button>
+                {isDean && (
+                  <button
+                    type="button"
+                    onClick={() => setExamScope('ALL_BRANCHES')}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs border cursor-pointer transition ${
+                      examScope === 'ALL_BRANCHES'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    All Campuses (Dean)
+                  </button>
+                )}
+                {isDean && (
+                  <button
+                    type="button"
+                    onClick={() => setExamScope('SELECTED_BRANCHES')}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs border cursor-pointer transition ${
+                      examScope === 'SELECTED_BRANCHES'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Selected Campuses
+                  </button>
+                )}
+              </div>
+
+              {examScope === 'SINGLE_BRANCH' && (
+                <div className="pt-3">
+                  {isDean ? (
+                    <select
+                      value={selectedBranchId}
+                      onChange={(e) => setSelectedBranchId(e.target.value)}
+                      className="w-full sm:w-1/2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 max-w-md">
+                      <span>🏫 Campus Branch: {branches.find((b) => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
+                      <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-semibold">Locked to Branch</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {examScope === 'SELECTED_BRANCHES' && (
+                <div className="pt-3 flex flex-wrap gap-2.5">
+                  {branches.map((b) => {
+                    const isSelected = selectedBranchIds.includes(b.id);
+                    return (
+                      <label key={b.id} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedBranchIds([...selectedBranchIds, b.id]);
+                            } else {
+                              setSelectedBranchIds(selectedBranchIds.filter((id) => id !== b.id));
+                            }
+                          }}
+                          className="rounded text-teal-600 focus:ring-teal-500"
+                        />
+                        <span className="font-bold text-slate-800 text-xs">{b.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CARD 2: TARGET STUDENT BATCHES GROUPED BY YEAR LEVEL */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">2. Target Student Batches (Multi-Batch Selection)</h2>
+                <p className="text-[11px] text-slate-500">
+                  Select target student streams for 1st Year (Junior) and 2nd Year (Senior). Classroom sections under selected batches will be included.
+                </p>
+              </div>
+              {selectedProgrammeIds.length > 0 && (
+                <span className="px-3 py-1 bg-teal-100 text-teal-900 border border-teal-200 rounded-full text-xs font-black shadow-2xs self-start sm:self-auto">
+                  {selectedProgrammeIds.length} Batches Selected ({firstYearSelectedCount} Junior, {secondYearSelectedCount} Senior)
+                </span>
+              )}
+            </div>
+
+            {loadingProgrammes ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div key={idx} className="h-10 animate-pulse rounded-xl bg-slate-200" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* 🟢 1ST YEAR BATCHES CARD */}
+                <div className="bg-emerald-50/40 p-5 rounded-2xl border border-emerald-200/80 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black tracking-wide">
+                        🎓 1st Year Classes (Junior Intermediate)
+                      </span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        ({firstYearSelectedCount}/{firstYearProgrammes.length} Selected)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFirstYear}
+                      className="px-3 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      {firstYearSelectedCount === firstYearProgrammes.length ? '✓ Deselect All 1st Year' : '+ Select All 1st Year'}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5 pt-1">
+                    {firstYearProgrammes.map((prog: Programme) => {
+                      const isSelected = selectedProgrammeIds.includes(prog.id);
+                      return (
+                        <button
+                          key={prog.id}
+                          type="button"
+                          onClick={() => handleProgrammeToggle(prog.id)}
+                          className={`px-3.5 py-2 rounded-xl font-extrabold text-xs border flex items-center gap-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-700 text-white border-emerald-700 shadow-md ring-2 ring-emerald-300 scale-102'
+                              : 'bg-white text-slate-700 border-emerald-200/80 hover:bg-emerald-100/50 shadow-2xs'
+                          }`}
+                        >
+                          <span>{programmeLabel(prog)}</span>
+                          <span className="text-[10px] opacity-90 font-mono font-semibold">(1st Year)</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 🔵 2ND YEAR BATCHES CARD */}
+                <div className="bg-indigo-50/40 p-5 rounded-2xl border border-indigo-200/80 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black tracking-wide">
+                        🎓 2nd Year Classes (Senior Intermediate)
+                      </span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        ({secondYearSelectedCount}/{secondYearProgrammes.length} Selected)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllSecondYear}
+                      className="px-3 py-1 bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      {secondYearSelectedCount === secondYearProgrammes.length ? '✓ Deselect All 2nd Year' : '+ Select All 2nd Year'}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5 pt-1">
+                    {secondYearProgrammes.map((prog: Programme) => {
+                      const isSelected = selectedProgrammeIds.includes(prog.id);
+                      return (
+                        <button
+                          key={prog.id}
+                          type="button"
+                          onClick={() => handleProgrammeToggle(prog.id)}
+                          className={`px-3.5 py-2 rounded-xl font-extrabold text-xs border flex items-center gap-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-700 text-white border-indigo-700 shadow-md ring-2 ring-indigo-300 scale-102'
+                              : 'bg-white text-slate-700 border-indigo-200/80 hover:bg-indigo-100/50 shadow-2xs'
+                          }`}
+                        >
+                          <span>{programmeLabel(prog)}</span>
+                          <span className="text-[10px] opacity-90 font-mono font-semibold">(2nd Year)</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {otherProgrammes.length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                    <span className="font-bold text-xs text-slate-700">Other Streams</span>
+                    <div className="flex flex-wrap gap-2">
+                      {otherProgrammes.map((prog: Programme) => {
+                        const isSelected = selectedProgrammeIds.includes(prog.id);
+                        return (
+                          <button
+                            key={prog.id}
+                            type="button"
+                            onClick={() => handleProgrammeToggle(prog.id)}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-teal-600 text-white border-teal-600'
+                                : 'bg-white text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            <span>{programmeLabel(prog)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* CARD 3: SUBJECT MARKS OVERRIDE & OPT-OUT GRID */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">3. Exam Subject Marks Override & Opt-Out</h2>
+                <p className="text-[11px] text-slate-500">Configure subject maximum marks, passing marks, or opt-out specific subjects for this assessment.</p>
+              </div>
+              <span className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold">
+                {availableProgrammeSubjects.length - optedOutSubjectIds.length} of {availableProgrammeSubjects.length} subjects included
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {availableProgrammeSubjects.map((sub) => {
+                const isOptedOut = optedOutSubjectIds.includes(sub.id);
+                const cfg = subjectConfigs[sub.id] || { maxMarks: sub.maxMarks, passMarks: sub.passMarks };
+                return (
+                  <div
+                    key={sub.id}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                      isOptedOut
+                        ? 'bg-slate-100/70 border-slate-200 opacity-60'
+                        : 'bg-slate-50/80 border-slate-200 shadow-2xs hover:bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOptOutSubject(sub.id)}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                          isOptedOut
+                            ? 'bg-slate-200 text-slate-600 border-slate-300'
+                            : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        }`}
+                      >
+                        {isOptedOut ? '🚫 Opted Out' : '✓ Included'}
+                      </button>
+                      <div>
+                        <span className={`font-extrabold block text-xs ${isOptedOut ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
+                          {sub.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">Code: {sub.code}</span>
+                      </div>
+                    </div>
+
+                    {!isOptedOut && (
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-extrabold text-center uppercase">Max</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={cfg.maxMarks}
+                            onChange={(e) => {
+                              const maxM = Number(e.target.value);
+                              setSubjectConfigs({
+                                ...subjectConfigs,
+                                [sub.id]: { ...cfg, maxMarks: maxM },
+                              });
+                            }}
+                            className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-center font-black text-xs outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-extrabold text-center uppercase">Pass</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={cfg.passMarks}
+                            onChange={(e) => {
+                              const passM = Number(e.target.value);
+                              setSubjectConfigs({
+                                ...subjectConfigs,
+                                [sub.id]: { ...cfg, passMarks: passM },
+                              });
+                            }}
+                            className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-center font-black text-xs outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* STICKY FLOATING ACTION DOCK */}
+          <div className="fixed bottom-5 right-8 z-30 bg-white/95 backdrop-blur-md p-3 px-5 rounded-2xl border border-slate-200 shadow-2xl flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('list');
+                setOverlapError(null);
+              }}
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={isCreatingExam}
+              className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95 transition"
+            >
+              {isCreatingExam ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>Create Assessment & Publish</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-6">
       {notification && (
@@ -446,7 +958,8 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                     setExamScope('SINGLE_BRANCH');
                     setSelectedBranchId(userBranchId);
                   }
-                  setShowCreateExamModal(true);
+                  setOverlapError(null);
+                  setViewMode('create');
                 }}
                 className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
               >
@@ -752,24 +1265,30 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   Select target student batches taking this assessment. All classroom sections (e.g. Section MPC-1A, MPC-1B) under selected batches will be automatically included.
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {programmes.map((prog) => {
-                    const isSelected = selectedProgrammeIds.includes(prog.id);
-                    return (
-                      <button
-                        key={prog.id}
-                        type="button"
-                        onClick={() => handleProgrammeToggle(prog.id)}
-                        className={`px-3 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs ring-2 ring-teal-300'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs'
-                        }`}
-                      >
-                        <span>{programmeLabel(prog)}</span>
-                        <span className="text-[10px] opacity-80 font-normal">({prog.yearLevel})</span>
-                      </button>
-                    );
-                  })}
+                  {loadingProgrammes ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <div key={idx} className="h-8 w-32 animate-pulse rounded-xl bg-slate-200" />
+                    ))
+                  ) : (
+                    programmes.map((prog) => {
+                      const isSelected = selectedProgrammeIds.includes(prog.id);
+                      return (
+                        <button
+                          key={prog.id}
+                          type="button"
+                          onClick={() => handleProgrammeToggle(prog.id)}
+                          className={`px-3 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-teal-600 text-white border-teal-600 shadow-xs ring-2 ring-teal-300'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs'
+                          }`}
+                        >
+                          <span>{programmeLabel(prog)}</span>
+                          <span className="text-[10px] opacity-80 font-normal">({prog.yearLevel})</span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
