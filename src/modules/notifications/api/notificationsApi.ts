@@ -23,6 +23,7 @@ export interface NotificationLog {
   sent_at?: string | null;
   delivered_at?: string | null;
   read_at?: string | null;
+  message_body?: string | null;
   created_at: string;
 }
 

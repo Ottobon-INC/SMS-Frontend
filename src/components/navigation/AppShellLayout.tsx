@@ -5,7 +5,7 @@ import { getDashboardPathForContext } from "../../modules/authentication/utils/r
 import {
   LayoutDashboard, ShieldAlert, Building2, GitBranch, Users, GraduationCap,
   UserRoundCheck, FileUp, Banknote, CalendarCheck, FileText, Bell, BarChart3,
-  FileClock, LifeBuoy, LogOut, School,
+  FileClock, LifeBuoy, LogOut, School, MessageSquare,
 } from "lucide-react";
 import React, { useState } from "react";
 import { GlobalDispatchBanner } from "./GlobalDispatchBanner";
@@ -28,6 +28,10 @@ const MODULE_ICONS: Record<string, React.ElementType> = {
   imports: FileUp, fees: Banknote, attendance: CalendarCheck,
   examinations: FileText, notifications: Bell, reports: BarChart3,
   audit: FileClock, support: LifeBuoy, "parent-portal": Users,
+};
+
+const ROUTE_ICONS: Record<string, React.ElementType> = {
+  "/whatsapp-simulator": MessageSquare,
 };
 
 const COLLAPSED = 56;
@@ -212,7 +216,7 @@ export function AppShellLayout() {
 
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 1 }}>
             {visibleItems.map((item) => {
-              const Icon = MODULE_ICONS[item.module] ?? LayoutDashboard;
+              const Icon = ROUTE_ICONS[item.route] ?? MODULE_ICONS[item.module] ?? LayoutDashboard;
               return (
                 <li key={item.route}>
                   <NavLink

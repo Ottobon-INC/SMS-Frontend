@@ -97,6 +97,14 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return parseResponse<T>(response);
 }
 
+export async function apiDelete<T>(path: string): Promise<T> {
+  const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    method: "DELETE",
+    headers: await buildHeaders()
+  });
+  return parseResponse<T>(response);
+}
+
 export async function apiDownloadBlob(path: string): Promise<Blob> {
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     headers: await buildHeaders()
