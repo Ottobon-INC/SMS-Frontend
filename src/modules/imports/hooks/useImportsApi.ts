@@ -15,10 +15,11 @@ export const useImportsApi = () => {
         queryFn: () => importsApi.getAcademicYears()
       }),
 
-    useProgrammes: () =>
+    useProgrammes: (branchId?: string, academicYearId?: string) =>
       useQuery({
-        queryKey: ["academicStructure", "programmes"],
-        queryFn: () => importsApi.getProgrammes()
+        queryKey: ["imports", "programmes", branchId, academicYearId],
+        queryFn: () => importsApi.getProgrammes(branchId, academicYearId),
+        enabled: !!branchId
       }),
 
     useBatches: (branchId?: string, academicYearId?: string, programmeId?: string) =>

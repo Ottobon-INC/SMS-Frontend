@@ -339,7 +339,7 @@ export function ManualAddStudentForm() {
 
   const { data: branches, isLoading: loadingBranches } = useBranches();
   const { data: academicYears, isLoading: loadingYears } = useAcademicYears();
-  const { data: programmes, isLoading: loadingProgrammes } = useProgrammes();
+  const { data: programmes, isLoading: loadingProgrammes } = useProgrammes(branchId, academicYearId);
   const { data: batches, isLoading: loadingBatches } = useBatches(branchId, academicYearId, programmeId);
   const { data: sections, isLoading: loadingSections } = useSections(batchId);
 

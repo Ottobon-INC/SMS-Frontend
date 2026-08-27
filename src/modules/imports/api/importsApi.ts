@@ -105,7 +105,13 @@ export const importsApi = {
   },
   getBranches: () => apiGet<LookupItem[]>("/imports/students/lookups/branches"),
   getAcademicYears: () => apiGet<LookupItem[]>("/imports/students/lookups/academic-years"),
-  getProgrammes: () => apiGet<ProgrammeLookup[]>("/academic-structure/programmes"),
+  getProgrammes: (branchId?: string, academicYearId?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.append("branch_id", branchId);
+    if (academicYearId) params.append("academic_year_id", academicYearId);
+    const qs = params.toString();
+    return apiGet<ProgrammeLookup[]>(`/imports/students/lookups/programmes${qs ? `?${qs}` : ""}`);
+  },
   getBatches: (branchId?: string, academicYearId?: string, programmeId?: string) => {
     const params = new URLSearchParams();
     if (branchId) params.append("branch_id", branchId);

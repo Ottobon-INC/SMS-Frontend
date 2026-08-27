@@ -133,7 +133,9 @@ export function AcademicStructurePage() {
         const results = await Promise.all(offeringsPromises);
         const map: Record<string, string[]> = {};
         branchesRes.forEach((branch, index) => {
-          map[branch.id] = (results[index] || []).map((programme) => programme.id);
+          map[branch.id] = Array.from(
+            new Set((results[index] || []).map((programme) => programme.programmeId || programme.id)),
+          );
         });
         setMatrixOfferings(map);
       }

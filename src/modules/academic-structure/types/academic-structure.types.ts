@@ -9,6 +9,8 @@ export interface Subject {
 
 export interface Programme {
   id: string;
+  programmeId?: string;
+  batchId?: string;
   code: string;
   name: string;
   streamCode?: string;
