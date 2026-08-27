@@ -96,7 +96,74 @@ const studentColumns: StudentColumn[] = [
   { key: 'guardianPhone', label: 'Guardian Phone', value: (s) => s.guardianPhone ?? s.guardian_phone, updateKey: 'guardian_phone' },
 ];
 
-function getHeaderCellClass(column: StudentColumn): string {
+const editableStudentColumns: StudentColumn[] = [
+  { key: 'admissionNumber', label: 'Admission No', value: (s) => s.admissionNumber, className: 'font-mono text-teal-700 font-bold' },
+  { key: 'studentName', label: 'Student Name', value: (s) => s.displayName ?? s.legalName ?? s.name, className: 'font-bold text-slate-900', updateKey: 'student_name' },
+  { key: 'studentNumber', label: 'Student No', value: (s) => s.studentNumber },
+  {
+    key: 'gender',
+    label: 'Gender',
+    value: (s) => s.gender,
+    updateKey: 'gender',
+    inputType: 'select',
+    options: ['MALE', 'FEMALE', 'OTHER'],
+  },
+  {
+    key: 'dateOfBirth',
+    label: 'Date Of Birth',
+    value: (s) => formatDateForDisplay(s.dateOfBirth ?? s.dob),
+    editValue: (s) => formatDateForEdit(s.dateOfBirth ?? s.dob),
+    updateKey: 'date_of_birth',
+    inputType: 'date',
+  },
+  { key: 'programmeName', label: 'Programme / Stream', value: getProgrammeDisplay },
+  { key: 'yearLevel', label: 'Year Level', value: getYearLevelDisplay },
+  { key: 'batchName', label: 'Batch', value: (s) => s.batchName },
+  { key: 'sectionName', label: 'Section', value: getSectionDisplay },
+  { key: 'academicYearName', label: 'Academic Year', value: (s) => s.academicYearName ?? s.academicYearCode },
+  { key: 'rollNumber', label: 'Roll No', value: (s) => s.rollNumber ?? s.rollNo, updateKey: 'roll_number' },
+  {
+    key: 'joiningDate',
+    label: 'Joining Date',
+    value: (s) => formatDateForDisplay(s.joiningDate),
+    editValue: (s) => formatDateForEdit(s.joiningDate),
+    updateKey: 'joining_date',
+    inputType: 'date',
+  },
+  {
+    key: 'endingDate',
+    label: 'Ending Date',
+    value: (s) => formatDateForDisplay(s.endingDate),
+    editValue: (s) => formatDateForEdit(s.endingDate),
+    updateKey: 'ending_date',
+    inputType: 'date',
+  },
+  { key: 'studentMobile', label: 'Student Mobile', value: (s) => s.studentMobile, updateKey: 'student_mobile' },
+  { key: 'studentEmail', label: 'Student Email', value: (s) => s.studentEmail, updateKey: 'student_email' },
+  { key: 'guardianName', label: 'Guardian Name', value: (s) => s.guardianName ?? s.father_name, updateKey: 'guardian_name' },
+  {
+    key: 'guardianRelationship',
+    label: 'Relationship',
+    value: (s) => formatRelationship(s.guardianRelationship ?? s.guardian_relationship),
+    editValue: (s) => s.guardianRelationship ?? s.guardian_relationship,
+    updateKey: 'guardian_relationship',
+    inputType: 'select',
+    options: ['FATHER', 'MOTHER', 'LEGAL_GUARDIAN', 'RELATIVE', 'SPONSOR', 'OTHER'],
+  },
+  { key: 'guardianPhone', label: 'Guardian Phone', value: (s) => s.guardianPhone ?? s.guardian_phone, updateKey: 'guardian_phone' },
+  { key: 'guardianEmail', label: 'Guardian Email', value: (s) => s.guardianEmail, updateKey: 'guardian_email' },
+  { key: 'enrollmentStatus', label: 'Enrollment Status', value: (s) => s.enrollmentStatus ?? s.status },
+  { key: 'studentCreatedAt', label: 'Created At', value: (s) => formatDateForDisplay(s.studentCreatedAt) },
+  { key: 'studentUpdatedAt', label: 'Updated At', value: (s) => formatDateForDisplay(s.studentUpdatedAt) },
+  { key: 'portalAccessEnabled', label: 'Portal Access', value: (s) => s.portalAccessEnabled },
+  { key: 'notificationEnabled', label: 'Notifications', value: (s) => s.notificationEnabled },
+  { key: 'paymentEnabled', label: 'Payments', value: (s) => s.paymentEnabled },
+];
+
+function getHeaderCellClass(column: StudentColumn, editMode: boolean): string {
+  if (editMode) {
+    return 'py-3.5 px-4 whitespace-nowrap border-r border-slate-200 last:border-r-0';
+  }
   const stickyClass =
     column.key === 'admissionNumber'
       ? 'sticky left-0 z-20 bg-slate-50'
@@ -106,7 +173,17 @@ function getHeaderCellClass(column: StudentColumn): string {
   return `py-3.5 px-4 whitespace-nowrap border-r border-slate-200 last:border-r-0 ${stickyClass}`;
 }
 
-function getBodyCellClass(column: StudentColumn): string {
+function getBodyCellClass(column: StudentColumn, editMode: boolean): string {
+  if (editMode) {
+    const widthClass =
+      column.key === 'admissionNumber'
+        ? 'min-w-[150px]'
+        : column.key === 'studentName'
+          ? 'min-w-[210px]'
+          : '';
+    const readonlyClass = column.updateKey == null ? 'bg-slate-50/40 text-slate-500' : '';
+    return `py-3 px-4 max-w-[260px] whitespace-nowrap border-r border-slate-100 last:border-r-0 ${widthClass} ${readonlyClass} ${column.className ?? 'text-slate-600'}`;
+  }
   const stickyClass =
     column.key === 'admissionNumber'
       ? 'sticky left-0 z-10 bg-white group-hover:bg-slate-50'
@@ -413,6 +490,7 @@ export const StudentsPage: React.FC = () => {
 
   const totalPages = Math.ceil(filteredStudents.length / PAGE_SIZE);
   const paginatedStudents = filteredStudents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const activeColumns = editMode ? editableStudentColumns : studentColumns;
 
   // Force branch selection for Dean (no "All Branches") - handled at top level
 
@@ -569,11 +647,11 @@ export const StudentsPage: React.FC = () => {
       ) : (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="max-h-[64vh] overflow-auto">
-            <table className="min-w-[900px] w-full text-left text-xs border-collapse">
+            <table className={`${editMode ? 'min-w-[3200px]' : 'min-w-[900px]'} w-full text-left text-xs border-collapse`}>
               <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
-                {studentColumns.map((column) => (
-                  <th key={column.key} className={getHeaderCellClass(column)}>
+                {activeColumns.map((column) => (
+                  <th key={column.key} className={getHeaderCellClass(column, editMode)}>
                     {column.label}
                   </th>
                 ))}
@@ -586,10 +664,10 @@ export const StudentsPage: React.FC = () => {
                   className={`group hover:bg-slate-50/80 transition ${!editMode ? 'cursor-pointer hover:bg-slate-50' : ''}`}
                   onClick={() => !editMode && setSelectedStudent(s)}
                 >
-                  {studentColumns.map((column) => (
+                  {activeColumns.map((column) => (
                     <td
                       key={`${s.id}-${column.key}`}
-                      className={getBodyCellClass(column)}
+                      className={getBodyCellClass(column, editMode)}
                       title={formatCellValue(column.value(s))}
                     >
                       {editMode && column.updateKey != null ? (

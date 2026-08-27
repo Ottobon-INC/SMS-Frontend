@@ -7,6 +7,7 @@ import {
   Users,
 } from "lucide-react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { AuthTransitionScreen } from "../components/AuthTransitionScreen";
 import { LoginForm } from "../components/LoginForm";
 import { portalDefinitions } from "../constants/portals";
 import { useAuth } from "../providers/AuthProvider";
@@ -93,6 +94,7 @@ export function LoginPage({ platform = false }: { platform?: boolean }) {
   const navigate = useNavigate();
   const auth = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [handoffLoading, setHandoffLoading] = useState(false);
   const portal = platform
     ? "platform"
     : ((params.get("portal") ?? "institution") as PortalKey);
@@ -102,8 +104,14 @@ export function LoginPage({ platform = false }: { platform?: boolean }) {
 
   async function handleSubmit(email: string, password: string) {
     setError(null);
+    setHandoffLoading(true);
     try {
+      const startedAt = Date.now();
       const selectedContext = await auth.login({ email, password }, portal);
+      const remainingDelay = Math.max(0, 1100 - (Date.now() - startedAt));
+      if (remainingDelay > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingDelay));
+      }
       if (selectedContext == null) {
         navigate("/select-context");
         return;
@@ -111,12 +119,21 @@ export function LoginPage({ platform = false }: { platform?: boolean }) {
       navigate(getDashboardPathForActiveContext(selectedContext));
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Sign in failed.");
-      if (auth.isAuthenticated) navigate("/select-context");
+      setHandoffLoading(false);
     }
   }
 
   const experience = portalExperience[portal];
   const PortalIcon = experience.Icon;
+
+  if (handoffLoading) {
+    return (
+      <AuthTransitionScreen
+        title="Opening your workspace"
+        message="Credentials verified. Loading your assigned role, permissions, modules, and dashboard context."
+      />
+    );
+  }
 
   return (
     <main className={`auth-page auth-page-${experience.accent}`}>

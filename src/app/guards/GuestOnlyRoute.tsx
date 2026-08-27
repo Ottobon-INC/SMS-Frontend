@@ -1,10 +1,11 @@
 import { Navigate, Outlet } from "react-router-dom";
+import { AuthTransitionScreen } from "../../modules/authentication/components/AuthTransitionScreen";
 import { useAuth } from "../../modules/authentication/providers/AuthProvider";
 import { getDashboardPathForActiveContext } from "../../modules/authentication/utils/routing";
 
 export function GuestOnlyRoute() {
   const auth = useAuth();
-  if (auth.loading) return <div className="content">Loading authentication...</div>;
+  if (auth.loading) return <AuthTransitionScreen />;
   if (auth.isAuthenticated && auth.activeContext != null) {
     return <Navigate to={getDashboardPathForActiveContext(auth.activeContext)} replace />;
   }

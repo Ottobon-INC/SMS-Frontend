@@ -1,17 +1,63 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { AuthTransitionScreen } from "../components/AuthTransitionScreen";
 import { useAuth } from "../providers/AuthProvider";
-import { getDashboardPathForContext } from "../utils/routing";
+import { getDashboardPathForActiveContext, getDashboardPathForContext } from "../utils/routing";
 
 export function ContextSelectionPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const [showNoAccess, setShowNoAccess] = useState(false);
+  const [choosingContext, setChoosingContext] = useState(false);
 
-  if (auth.loading) return <main className="content">Loading authentication...</main>;
+  useEffect(() => {
+    if (auth.loading || !auth.isAuthenticated || auth.activeContext != null || auth.availableContexts.length > 0) {
+      setShowNoAccess(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowNoAccess(true), 1600);
+    return () => window.clearTimeout(timer);
+  }, [auth.activeContext, auth.availableContexts.length, auth.isAuthenticated, auth.loading]);
+
+  if (auth.loading) {
+    return <AuthTransitionScreen />;
+  }
   if (!auth.isAuthenticated) return <main className="content">Please sign in again.</main>;
+  if (choosingContext) {
+    return (
+      <AuthTransitionScreen
+        title="Switching workspace"
+        message="Applying your selected access context and opening the right dashboard."
+      />
+    );
+  }
+  if (auth.activeContext != null) {
+    return <Navigate to={getDashboardPathForActiveContext(auth.activeContext)} replace />;
+  }
+  if (auth.availableContexts.length === 0 && !showNoAccess) {
+    return (
+      <AuthTransitionScreen
+        title="Loading access context"
+        message="Fetching active assignments and preparing the correct dashboard."
+      />
+    );
+  }
 
   async function choose(assignmentId: string) {
-    await auth.selectContext(assignmentId);
-    navigate(getDashboardPathForContext(auth.availableContexts.find((context) => context.assignment_id === assignmentId)));
+    setChoosingContext(true);
+    const selectedSummary = auth.availableContexts.find((context) => context.assignment_id === assignmentId);
+    const startedAt = Date.now();
+    try {
+      await auth.selectContext(assignmentId);
+      const remainingDelay = Math.max(0, 900 - (Date.now() - startedAt));
+      if (remainingDelay > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingDelay));
+      }
+      navigate(getDashboardPathForContext(selectedSummary));
+    } finally {
+      setChoosingContext(false);
+    }
   }
 
   return (
