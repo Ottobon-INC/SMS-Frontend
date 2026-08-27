@@ -1,59 +1,60 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { AuthTransitionScreen } from "../components/AuthTransitionScreen";
 import { useAuth } from "../providers/AuthProvider";
 import { getDashboardPathForActiveContext, getDashboardPathForContext } from "../utils/routing";
+import { dashboardApi } from "../../dashboard/api/dashboardApi";
+
+function warmDashboardForContext(role: string | undefined) {
+  if (role === "INSTITUTION_ADMIN") {
+    void dashboardApi.warmInstitutionDashboard();
+  } else if (role === "BRANCH_ADMIN" || role === "OFFICE_STAFF") {
+    void dashboardApi.warmOfficeStaffDashboard();
+  }
+}
 
 export function ContextSelectionPage() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const [showNoAccess, setShowNoAccess] = useState(false);
+  const [refreshingContext, setRefreshingContext] = useState(false);
   const [choosingContext, setChoosingContext] = useState(false);
 
   useEffect(() => {
-    if (auth.loading || !auth.isAuthenticated || auth.activeContext != null || auth.availableContexts.length > 0) {
-      setShowNoAccess(false);
+    if (auth.loading || !auth.isAuthenticated || auth.contextResolved || refreshingContext) {
       return;
     }
 
-    const timer = window.setTimeout(() => setShowNoAccess(true), 1600);
-    return () => window.clearTimeout(timer);
-  }, [auth.activeContext, auth.availableContexts.length, auth.isAuthenticated, auth.loading]);
+    let cancelled = false;
+    setRefreshingContext(true);
+    auth.refreshApplicationContext()
+      .catch(() => {
+        if (!cancelled) {
+          void auth.logout();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRefreshingContext(false);
+        }
+      });
 
-  if (auth.loading) {
-    return <AuthTransitionScreen />;
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, auth.contextResolved, auth.isAuthenticated, auth.loading, refreshingContext]);
+
+  if (auth.loading || refreshingContext || !auth.contextResolved) {
+    return null;
   }
   if (!auth.isAuthenticated) return <main className="content">Please sign in again.</main>;
-  if (choosingContext) {
-    return (
-      <AuthTransitionScreen
-        title="Switching workspace"
-        message="Applying your selected access context and opening the right dashboard."
-      />
-    );
-  }
   if (auth.activeContext != null) {
     return <Navigate to={getDashboardPathForActiveContext(auth.activeContext)} replace />;
   }
-  if (auth.availableContexts.length === 0 && !showNoAccess) {
-    return (
-      <AuthTransitionScreen
-        title="Loading access context"
-        message="Fetching active assignments and preparing the correct dashboard."
-      />
-    );
-  }
-
   async function choose(assignmentId: string) {
-    setChoosingContext(true);
     const selectedSummary = auth.availableContexts.find((context) => context.assignment_id === assignmentId);
-    const startedAt = Date.now();
     try {
       await auth.selectContext(assignmentId);
-      const remainingDelay = Math.max(0, 900 - (Date.now() - startedAt));
-      if (remainingDelay > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, remainingDelay));
-      }
+      setChoosingContext(true);
+      warmDashboardForContext(selectedSummary?.role.code);
       navigate(getDashboardPathForContext(selectedSummary));
     } finally {
       setChoosingContext(false);
@@ -69,7 +70,13 @@ export function ContextSelectionPage() {
       </section>
       <section className="portal-grid">
         {auth.availableContexts.map((context) => (
-          <button className="portal-card" key={context.assignment_id} type="button" onClick={() => void choose(context.assignment_id)}>
+          <button
+            className="portal-card"
+            disabled={choosingContext}
+            key={context.assignment_id}
+            type="button"
+            onClick={() => void choose(context.assignment_id)}
+          >
             <span>{context.role.label}</span>
             <small>{context.tenant?.name ?? "Ottobon Platform"}</small>
             <small>{context.branch?.name}</small>

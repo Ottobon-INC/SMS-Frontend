@@ -31,7 +31,7 @@ export function DeanBranchViewPage() {
     setIsLoading(true);
     setError(null);
     try {
-      setDashboard(await dashboardApi.getOfficeStaffDashboard(branchId));
+      setDashboard(await dashboardApi.refreshOfficeStaffDashboard(branchId));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load branch dashboard.",
@@ -42,7 +42,23 @@ export function DeanBranchViewPage() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    if (!branchId) return;
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    dashboardApi.getOfficeStaffDashboard(branchId)
+      .then((response) => {
+        if (!cancelled) setDashboard(response);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load branch dashboard.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [branchId]);
 
   if (isLoading) {

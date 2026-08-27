@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { queryClient } from "../../../app/query/queryClient";
 import { getStoredAccessToken, storeAccessAssignmentId, storeAccessToken } from "../../../api/client/apiClient";
+import { dashboardApi } from "../../dashboard/api/dashboardApi";
 import { fetchCurrentUser, loginWithPassword, selectAccessContext } from "../api/authClient";
 import { portalDefinitions } from "../constants/portals";
 import type {
@@ -21,6 +22,7 @@ function contextMatchesPortal(context: AccessContextSummary, portal: PortalKey):
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => getStoredAccessToken() != null);
   const [loading, setLoading] = useState(true);
+  const [contextResolved, setContextResolved] = useState(false);
   const [appUser, setAppUser] = useState<AuthenticatedUser | null>(null);
   const [availableContexts, setAvailableContexts] = useState<AccessContextSummary[]>([]);
   const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAvailableContexts(response.available_contexts);
     setActiveContext(response.active_context);
     storeAccessAssignmentId(response.active_context?.assignment_id ?? null);
+    setContextResolved(true);
   }, []);
 
   const refreshApplicationContext = useCallback(async () => {
@@ -52,7 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setActiveContext(null);
           storeAccessAssignmentId(null);
           setIsAuthenticated(false);
+          setContextResolved(true);
         }
+      } else {
+        setContextResolved(true);
       }
       setLoading(false);
     }
@@ -64,42 +70,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (credentials: LoginCredentials, portal: PortalKey) => {
+      setContextResolved(false);
       const response = await loginWithPassword(credentials.email, credentials.password, portal);
       storeAccessToken(response.access_token);
       setIsAuthenticated(true);
       const matchingContexts = response.available_contexts.filter((context) =>
         contextMatchesPortal(context, portal)
       );
+      if (matchingContexts.length === 0) {
+        storeAccessToken(null);
+        storeAccessAssignmentId(null);
+        setIsAuthenticated(false);
+        setAppUser(null);
+        setAvailableContexts([]);
+        setActiveContext(null);
+        setContextResolved(true);
+        throw new Error(`This account does not have access to the ${portalDefinitions[portal].label} portal.`);
+      }
       if (matchingContexts.length === 1) {
         const selected = await selectAccessContext(matchingContexts[0].assignment_id);
         applyCurrentUser(selected);
         return selected.active_context;
       }
       applyCurrentUser(response);
-      if (matchingContexts.length === 0) {
-        throw new Error(`This account does not have access to the ${portalDefinitions[portal].label} portal.`);
-      }
       return response.active_context;
     },
     [applyCurrentUser]
   );
 
   const logout = useCallback(async () => {
-    storeAccessToken(null);
-    setIsAuthenticated(false);
-    setAppUser(null);
-    setAvailableContexts([]);
-    setActiveContext(null);
-    storeAccessAssignmentId(null);
-    queryClient.clear();
-  }, []);
+      storeAccessToken(null);
+      setIsAuthenticated(false);
+      setAppUser(null);
+      setAvailableContexts([]);
+      setActiveContext(null);
+      storeAccessAssignmentId(null);
+      setContextResolved(true);
+      queryClient.clear();
+      dashboardApi.clearDashboardCache();
+    }, []);
 
   const selectContext = useCallback(
     async (assignmentId: string) => {
+      setContextResolved(false);
       storeAccessAssignmentId(assignmentId);
       const response = await selectAccessContext(assignmentId);
       applyCurrentUser(response);
       queryClient.clear();
+      dashboardApi.clearDashboardCache();
     },
     [applyCurrentUser]
   );
@@ -108,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isAuthenticated,
       loading,
+      contextResolved,
       appUser,
       availableContexts,
       activeContext,
@@ -123,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [
       isAuthenticated,
       loading,
+      contextResolved,
       appUser,
       availableContexts,
       activeContext,

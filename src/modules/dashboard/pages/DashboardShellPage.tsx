@@ -32,7 +32,7 @@ export function DashboardShellPage() {
     setIsLoading(true);
     setError(null);
     try {
-      setDashboard(await dashboardApi.getOfficeStaffDashboard());
+      setDashboard(await dashboardApi.refreshOfficeStaffDashboard());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard.");
     } finally {
@@ -41,7 +41,22 @@ export function DashboardShellPage() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    dashboardApi.getOfficeStaffDashboard()
+      .then((response) => {
+        if (!cancelled) setDashboard(response);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [auth.activeContext?.assignment_id]);
 
   const todayLabel = useMemo(

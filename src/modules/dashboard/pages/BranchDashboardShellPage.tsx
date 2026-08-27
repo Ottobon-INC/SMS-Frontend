@@ -33,7 +33,7 @@ export function BranchDashboardShellPage() {
     try {
       // The Principal operates at the branch level, so we reuse the office staff API
       // which returns exactly the branch-scoped operational data we need to review.
-      setDashboard(await dashboardApi.getOfficeStaffDashboard());
+      setDashboard(await dashboardApi.refreshOfficeStaffDashboard());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load branch dashboard.");
     } finally {
@@ -42,7 +42,22 @@ export function BranchDashboardShellPage() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    dashboardApi.getOfficeStaffDashboard()
+      .then((response) => {
+        if (!cancelled) setDashboard(response);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load branch dashboard.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [auth.activeContext?.assignment_id]);
 
   const todayLabel = useMemo(

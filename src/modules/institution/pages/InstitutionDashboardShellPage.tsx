@@ -33,7 +33,7 @@ export function InstitutionDashboardShellPage() {
     setIsLoading(true);
     setError(null);
     try {
-      setDashboard(await dashboardApi.getInstitutionDashboard());
+      setDashboard(await dashboardApi.refreshInstitutionDashboard());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load institution dashboard.");
     } finally {
@@ -42,7 +42,22 @@ export function InstitutionDashboardShellPage() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    dashboardApi.getInstitutionDashboard()
+      .then((response) => {
+        if (!cancelled) setDashboard(response);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load institution dashboard.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [auth.activeContext?.assignment_id]);
 
   const todayLabel = useMemo(

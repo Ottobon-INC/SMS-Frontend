@@ -65,6 +65,7 @@ export type LoginCredentials = {
 export type AuthContextValue = {
   isAuthenticated: boolean;
   loading: boolean;
+  contextResolved: boolean;
   appUser: AuthenticatedUser | null;
   availableContexts: AccessContextSummary[];
   activeContext: ActiveContext | null;
