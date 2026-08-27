@@ -57,7 +57,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
         (s.admissionNumber && s.admissionNumber.toLowerCase().includes(q));
 
       const currentStatus = localState[s.enrollmentId] || s.attendanceStatus;
-      
+
       if (filterType === "ALL") return matchesSearch;
       return matchesSearch && currentStatus === filterType;
     });
@@ -79,7 +79,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
         }
         return;
       }
-      
+
       if (filteredStudents.length === 0) return;
 
       if (e.key === "ArrowDown") {
@@ -144,7 +144,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
         {filteredStudents.map((s, idx) => {
           const currentStatus = localState[s.enrollmentId] || s.attendanceStatus;
           const isHighlighted = idx === highlightedIndex;
-          
+
           let rowBg = "";
           if (editable && isHighlighted) {
             rowBg = "bg-teal-50 ring-2 ring-inset ring-teal-400 z-10 relative shadow-sm";
@@ -157,7 +157,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
               ? "bg-amber-50/40"
               : "";
           }
-          
+
           if (showUnmarkedWarning && currentStatus === "UNMARKED") {
             rowBg = "bg-rose-50 ring-2 ring-inset ring-rose-400 z-10 relative shadow-sm unmarked-row";
           }
@@ -239,7 +239,7 @@ export const StudentRosterTable: React.FC<StudentRosterTableProps> = ({
           );
         })}
       </div>
-      
+
       {filteredStudents.length === 0 && (
         <div className="py-12 text-center text-slate-400 bg-white text-sm">
           No students match your current filters.

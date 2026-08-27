@@ -12,7 +12,7 @@ export function useSessionStorage<T>(key: string, initialValue: T | (() => T)) {
     } catch (error) {
       console.warn(`Error reading sessionStorage key "${key}":`, error);
     }
-    
+
     // if initialValue is a function, evaluate it
     if (initialValue instanceof Function) {
       return initialValue();

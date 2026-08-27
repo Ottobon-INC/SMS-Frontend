@@ -122,14 +122,14 @@ function getBodyCellClass(column: StudentColumn): string {
   return `py-3 px-4 max-w-[260px] whitespace-nowrap border-r border-slate-100 last:border-r-0 ${stickyClass} ${widthClass} ${column.className ?? 'text-slate-600'}`;
 }
 
-const SearchableBranchSelect = ({ 
-  branches, 
-  value, 
-  onChange 
-}: { 
-  branches: { id: string, name: string }[], 
-  value: string, 
-  onChange: (val: string) => void 
+const SearchableBranchSelect = ({
+  branches,
+  value,
+  onChange
+}: {
+  branches: { id: string, name: string }[],
+  value: string,
+  onChange: (val: string) => void
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -150,23 +150,23 @@ const SearchableBranchSelect = ({
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className="px-3 py-2 min-w-[200px] bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-teal-500 flex justify-between items-center gap-2 transition"
       >
         <span className="truncate">{selectedBranch ? selectedBranch.name : 'Select Branch...'}</span>
         <ChevronDown className="w-4 h-4 text-slate-400" />
       </button>
-      
+
       {isOpen && (
         <div className="absolute z-50 top-full left-0 mt-1 w-[280px] bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-100">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-              <input 
+              <input
                 autoFocus
-                type="text" 
-                placeholder="Search branches..." 
+                type="text"
+                placeholder="Search branches..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-teal-500"
@@ -198,7 +198,7 @@ export const StudentsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const isTenantLevel = !auth.activeContext?.branch_id;
   const { data: branches = [] } = useAttendanceBranches();
-  
+
   const [branchFilter, setBranchFilter] = useState<string>(isTenantLevel ? 'PENDING' : 'ALL');
 
   // Set default branch for Tenant Level users once branches load
@@ -210,9 +210,9 @@ export const StudentsPage: React.FC = () => {
 
   const fetchBranchId = isTenantLevel ? (branchFilter === 'PENDING' ? undefined : branchFilter) : undefined;
   const shouldFetch = !isTenantLevel || branchFilter !== 'PENDING';
-  
+
   const { data: students = [], isLoading: loading, refetch } = useStudents(fetchBranchId, shouldFetch);
-  
+
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [streamFilter, setStreamFilter] = useState<string>('ALL');
@@ -222,7 +222,7 @@ export const StudentsPage: React.FC = () => {
   const [savingEdits, setSavingEdits] = useState<boolean>(false);
   const [draftChanges, setDraftChanges] = useState<Record<string, StudentInlineUpdatePayload>>({});
   const [selectedStudent, setSelectedStudent] = useState<StudentListItem | null>(null);
-  
+
   // Pagination
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -381,11 +381,11 @@ export const StudentsPage: React.FC = () => {
       s.branchId === branchFilter || // use API branch ID if available
       s.branchName === branchFilter ||
       s.branchCode === branchFilter;
-      
+
     const matchesYear =
       yearFilter === 'ALL' ||
       (yearFilter === '1' && (
-        s.batchName?.toLowerCase().includes('1st') || 
+        s.batchName?.toLowerCase().includes('1st') ||
         s.batchName?.toLowerCase().includes('jr') ||
         s.batchName?.toLowerCase().includes('first') ||
         s.section?.toLowerCase().includes('jr') ||
@@ -394,7 +394,7 @@ export const StudentsPage: React.FC = () => {
         s.sectionName?.toLowerCase().includes('1st')
       )) ||
       (yearFilter === '2' && (
-        s.batchName?.toLowerCase().includes('2nd') || 
+        s.batchName?.toLowerCase().includes('2nd') ||
         s.batchName?.toLowerCase().includes('sr') ||
         s.batchName?.toLowerCase().includes('second') ||
         s.section?.toLowerCase().includes('sr') ||
@@ -507,7 +507,7 @@ export const StudentsPage: React.FC = () => {
               <span className="font-bold text-slate-600 flex items-center gap-1">
                 <Filter className="w-3.5 h-3.5 text-slate-400" /> Branch:
               </span>
-              <SearchableBranchSelect 
+              <SearchableBranchSelect
                 branches={branches}
                 value={branchFilter}
                 onChange={setBranchFilter}
@@ -581,8 +581,8 @@ export const StudentsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {paginatedStudents.map((s) => (
-                <tr 
-                  key={s.id} 
+                <tr
+                  key={s.id}
                   className={`group hover:bg-slate-50/80 transition ${!editMode ? 'cursor-pointer hover:bg-slate-50' : ''}`}
                   onClick={() => !editMode && setSelectedStudent(s)}
                 >
@@ -897,9 +897,9 @@ export const StudentsPage: React.FC = () => {
       )}
 
       {/* Side Panel */}
-      <StudentProfileSidePanel 
-        student={selectedStudent} 
-        onClose={() => setSelectedStudent(null)} 
+      <StudentProfileSidePanel
+        student={selectedStudent}
+        onClose={() => setSelectedStudent(null)}
       />
     </div>
   );

@@ -29,14 +29,14 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Panel */}
       <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out border-l border-slate-200">
-        
+
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -48,7 +48,7 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
               <p className="text-xs font-semibold text-slate-500 font-mono mt-0.5">{student.admissionNumber}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
@@ -58,7 +58,7 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          
+
           {/* Status Badge */}
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
