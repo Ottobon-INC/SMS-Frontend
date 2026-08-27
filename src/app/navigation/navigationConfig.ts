@@ -34,6 +34,7 @@ export const navigationItems: NavigationItem[] = [
   { label: "Attendance", route: "/attendance", module: "attendance", permissions: ["attendance.view"] },
   { label: "Examinations", route: "/examinations", module: "examinations", permissions: ["exam.view"] },
   { label: "Notifications", route: "/notifications", module: "notifications", permissions: ["notification.view"] },
+  { label: "WhatsApp", route: "/whatsapp-simulator", module: "notifications", permissions: ["notification.view"] },
   { label: "Reports", route: "/reports", module: "reports", permissions: ["report.branch_view"] },
   { label: "Audit", route: "/audit", module: "audit", permissions: ["audit.view"] },
   { label: "Support", route: "/support", module: "support" },

@@ -29,6 +29,7 @@ import { AttendanceLandingPage } from "../../modules/attendance/pages/Attendance
 import { AttendanceSessionPage } from "../../modules/attendance/pages/AttendanceSessionPage";
 
 import { NotificationsAuditPage } from "../../modules/notifications/pages/NotificationsAuditPage";
+import { WhatsAppSimulatorPage } from "../../modules/whatsapp-simulator/pages/WhatsAppSimulatorPage";
 
 const moduleRoutes = ["reports", "audit", "support"];
 
@@ -133,6 +134,10 @@ const router = createBrowserRouter([
           protectedPage("/notifications", <NotificationsAuditPage />, {
             module: "notifications",
             permission: "notification.view"
+          }),
+          protectedPage("/whatsapp-simulator", <WhatsAppSimulatorPage />, {
+            module: "notifications",
+            permission: "notification.view",
           }),
           ...moduleRoutes.map((moduleName) => ({
             element: (

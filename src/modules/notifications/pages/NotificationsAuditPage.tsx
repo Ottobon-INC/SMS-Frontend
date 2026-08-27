@@ -16,6 +16,7 @@ import {
   UserCheck,
   X,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 import { notificationsApi, NotificationLog } from '../api/notificationsApi';
@@ -94,6 +95,33 @@ export const NotificationsAuditPage: React.FC = () => {
   const userBranchId = summary?.branch?.id;
   const userRoleCode = summary?.role?.code || auth.activeContext?.role_codes?.[0] || '';
   const isSuperAdminOrDean = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'ACADEMIC_DEAN', 'INSTITUTION_ADMIN'].includes(userRoleCode);
+  const [selectedLogForPreview, setSelectedLogForPreview] = useState<NotificationLog | null>(null);
+
+  const renderFormattedWhatsAppText = (text: string) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+
+    return lines.map((line, lineIdx) => {
+      const parts = line.split(/(\*.*?\*|_.*?_)/g);
+
+      const formattedLine = parts.map((part, partIdx) => {
+        if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+          return <strong key={partIdx} className="font-extrabold text-slate-900">{part.slice(1, -1)}</strong>;
+        }
+        if (part.startsWith('_') && part.endsWith('_') && part.length > 2) {
+          return <em key={partIdx} className="italic text-teal-800">{part.slice(1, -1)}</em>;
+        }
+        return part;
+      });
+
+      return (
+        <React.Fragment key={lineIdx}>
+          {formattedLine}
+          {lineIdx < lines.length - 1 && <br />}
+        </React.Fragment>
+      );
+    });
+  };
 
 
   const fetchLogs = async (isInitial: boolean = false) => {
@@ -335,19 +363,30 @@ export const NotificationsAuditPage: React.FC = () => {
 
                     {/* CONTACT ACTION COLUMN */}
                     <td className="p-3.5 pr-6 text-right whitespace-nowrap">
-                      {log.delivery_status === 'FAILED_MISSING_PHONE' ? (
-                        <button
-                          onClick={() => {
-                            setSelectedLogForUpdate(log);
-                            setNewMobileNumber('');
-                          }}
-                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-[11px] shadow-xs flex items-center gap-1 ml-auto cursor-pointer"
-                        >
-                          <PhoneCall className="w-3.5 h-3.5" /> Update Mobile
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-[11px]">Logged</span>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {log.message_body && (
+                          <button
+                            onClick={() => setSelectedLogForPreview(log)}
+                            className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-xl font-bold text-[11px] shadow-2xs flex items-center gap-1 cursor-pointer transition"
+                            title="Click to preview exact message body content sent to parent"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" /> View Message
+                          </button>
+                        )}
+                        {log.delivery_status === 'FAILED_MISSING_PHONE' ? (
+                          <button
+                            onClick={() => {
+                              setSelectedLogForUpdate(log);
+                              setNewMobileNumber('');
+                            }}
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <PhoneCall className="w-3.5 h-3.5" /> Update Mobile
+                          </button>
+                        ) : !log.message_body ? (
+                          <span className="text-slate-400 text-[11px]">Logged</span>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -421,6 +460,66 @@ export const NotificationsAuditPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MESSAGE CONTENT PREVIEW MODAL */}
+      {selectedLogForPreview && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-100 text-emerald-800 rounded-2xl">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Outbound Message Content</h3>
+                  <p className="text-xs text-slate-500">
+                    To: <span className="font-bold text-slate-800">{selectedLogForPreview.student_name || 'Student Parent'}</span> ({selectedLogForPreview.recipient_phone || 'No Phone'})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedLogForPreview(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-[#efeae2] p-4 rounded-2xl border border-slate-200">
+              <div className="bg-[#d9fdd3] text-slate-900 rounded-2xl rounded-tr-xs p-4 shadow-sm border border-emerald-200 space-y-2 text-xs">
+                <div className="flex justify-between items-center border-b border-emerald-300/60 pb-1.5 text-[10px]">
+                  <span className="font-extrabold uppercase text-emerald-900 tracking-wider">
+                    {selectedLogForPreview.event_type.replace(/_/g, ' ')}
+                  </span>
+                  <span className="font-mono text-emerald-800 font-semibold">
+                    {selectedLogForPreview.template_name}
+                  </span>
+                </div>
+
+                <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-800">
+                  {renderFormattedWhatsAppText(selectedLogForPreview.message_body || 'No message content available.')}
+                </div>
+
+                <div className="flex justify-between items-center pt-2 border-t border-emerald-300/50 text-[10px] text-emerald-800">
+                  <span>Sent: {new Date(selectedLogForPreview.created_at).toLocaleString()}</span>
+                  <span className="font-bold flex items-center gap-1 text-emerald-900">
+                    {statusBadge(selectedLogForPreview.delivery_status)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => setSelectedLogForPreview(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}
