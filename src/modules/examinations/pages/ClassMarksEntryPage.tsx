@@ -474,10 +474,10 @@ export const ClassMarksEntryPage: React.FC<{ initialExamId?: string; onBack?: ()
   });
 
   // Role-Based Access Control (RBAC) Scoping
-  
+
   const activeSec = sections.find((s) => s.id === selectedSectionId);
   const activeSectionStatus = activeSec?.status || 'DRAFT';
-  const isLockedForTeacher = 
+  const isLockedForTeacher =
     (activeSectionStatus === 'SUBMITTED' || activeSectionStatus === 'PUBLISHED') &&
     selectedExam?.status !== 'RETURNED_FOR_CORRECTION';
 
