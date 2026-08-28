@@ -355,34 +355,56 @@ export const BranchesPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 p-6">
-      {notification && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-semibold">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{notification}</span>
+    <div className="min-h-full bg-slate-50 pb-20">
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 py-8 md:px-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Branch Management</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-500/20 text-blue-300 border-blue-500/30">
+                    Total: {branches.length}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  Manage regional campus branches, location details, contact numbers, and assign Principals.
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Today</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
           </div>
-          <button onClick={() => setNotification(null)} className="text-emerald-600 hover:text-emerald-800">
-            <X className="w-4 h-4" />
-          </button>
         </div>
-      )}
+      </div>
 
-      {/* Header Banner */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-teal-600" /> Institutional Campus Governance
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Manage regional campus branches, location details, contact numbers, and assign pre-created system users as Principals.
-          </p>
-        </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
+        {notification && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{notification}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-emerald-600 hover:text-emerald-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        <div className="flex items-center gap-3">
+        {/* Actions Bar */}
+        <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-3">
           <button
             onClick={fetchBranches}
-            className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
             title="Refresh Branches"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -393,7 +415,7 @@ export const BranchesPage: React.FC = () => {
                 resetForm();
                 setShowAddModal(true);
               }}
-              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer transition"
+              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2 cursor-pointer transition"
             >
               <Plus className="w-4 h-4" /> Add Campus Branch
             </button>
@@ -403,9 +425,8 @@ export const BranchesPage: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Search & Filter Bar */}
+        {/* Search & Filter Bar */}
       <div className="flex justify-between items-center gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -865,5 +886,6 @@ export const BranchesPage: React.FC = () => {
         </div>
       )}
     </div>
+  </div>
   );
 };

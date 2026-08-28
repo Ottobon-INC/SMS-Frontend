@@ -399,31 +399,53 @@ export function FeesPage() {
   );
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-bold text-slate-950">
-              <IndianRupee className="h-6 w-6 text-teal-600" />
-              Fee Accounts & Student Ledger
-            </h1>
-            <p className="mt-1 text-xs text-slate-500">
-              View assigned fees, scholarships, concessions, payments and outstanding dues from PostgreSQL. Use Imports for bulk fee setup.
-            </p>
+    <div className="min-h-full bg-slate-50 pb-20">
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 py-8 md:px-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <IndianRupee className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Fee Management</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30">
+                    Accounts: {accounts.length}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  View assigned fees, scholarships, concessions, payments and outstanding dues. Use Imports for bulk fee setup.
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Today</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
+        {/* Actions Bar */}
+        <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-3">
           <button
             type="button"
             onClick={() => void fetchFeeAccounts()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
+            className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
             title="Refresh fee accounts"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
             type="button"
             onClick={() => openReminderModal()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700 active:scale-95 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 cursor-pointer"
           >
             <WalletCards className="h-4 w-4" />
             📲 Send Fee Reminders
@@ -432,14 +454,13 @@ export function FeesPage() {
             <button
               type="button"
               onClick={() => void openSetupModal()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-teal-700"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               Manual Fee Setup
             </button>
           )}
         </div>
-      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -1152,5 +1173,6 @@ export function FeesPage() {
         </div>
       )}
     </div>
+  </div>
   );
 }
