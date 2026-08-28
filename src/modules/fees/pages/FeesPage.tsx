@@ -32,6 +32,18 @@ function money(value: string): string {
   }).format(parsed);
 }
 
+function formatShortMoney(value: string): string {
+  const num = Number(value);
+  if (Number.isNaN(num) || num === 0) return "₹0";
+  if (num >= 100000) {
+    return `₹${(num / 100000).toFixed(2)}L`;
+  }
+  if (num >= 1000) {
+    return `₹${(num / 1000).toFixed(1)}K`;
+  }
+  return `₹${num}`;
+}
+
 function statusClass(status: string): string {
   if (status === "PAID") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "PARTIALLY_PAID") return "bg-amber-50 text-amber-700 border-amber-200";
@@ -462,7 +474,28 @@ export function FeesPage() {
           )}
         </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+
+
+      {/* Mobile Compact 3-Column Metric Strip (< 768px) */}
+      <div className="block md:hidden p-3 bg-slate-900 rounded-2xl text-white shadow-xs border border-slate-800">
+        <div className="grid grid-cols-3 divide-x divide-slate-800 text-center">
+          <div className="px-1">
+            <p className="text-[9.5px] font-semibold text-slate-400 uppercase tracking-wider">Net Payable</p>
+            <p className="text-xs font-extrabold text-white mt-0.5">{formatShortMoney(String(totals.net))}</p>
+          </div>
+          <div className="px-1">
+            <p className="text-[9.5px] font-semibold text-emerald-400 uppercase tracking-wider">Paid</p>
+            <p className="text-xs font-extrabold text-emerald-400 mt-0.5">{formatShortMoney(String(totals.paid))}</p>
+          </div>
+          <div className="px-1">
+            <p className="text-[9.5px] font-semibold text-rose-400 uppercase tracking-wider">Outstanding</p>
+            <p className="text-xs font-extrabold text-rose-400 mt-0.5">{formatShortMoney(String(totals.outstanding))}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop 3-Card Summary Grid (>= 768px - PC Only) */}
+      <div className="hidden md:grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Net Payable</p>
           <p className="mt-2 text-lg font-bold text-slate-950">{money(String(totals.net))}</p>
@@ -509,74 +542,156 @@ export function FeesPage() {
             </p>
           </div>
         ) : (
-          <div className="max-h-[560px] overflow-auto">
-            <table className="min-w-[1440px] w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="border-b border-slate-200 px-4 py-3">Admission No</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Student</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Academic Year</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Year Level</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Programme / Stream</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Section</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Assigned</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Scholarship</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Concession</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Net Payable</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Paid</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Outstanding</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Schedule</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Status</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredAccounts.map((account) => (
-                  <tr key={account.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono font-bold text-teal-700">{account.admission_number ?? "-"}</td>
-                    <td className="px-4 py-3 font-bold text-slate-950">{account.student_name}</td>
-                    <td className="px-4 py-3 text-slate-700">{account.academic_year ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-700">{yearLevelDisplay(account)}</td>
-                    <td className="px-4 py-3 text-slate-700">{programmeDisplay(account)}</td>
-                    <td className="px-4 py-3 text-slate-700">{sectionDisplay(account)}</td>
-                    <td className="px-4 py-3 text-right font-mono">{money(account.assigned_fee_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono">{money(account.scholarship_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono">{money(account.concession_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">{money(account.net_payable_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-emerald-700">{money(account.total_paid_amount)}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-rose-700">{money(account.outstanding_amount)}</td>
-                    <td className="px-4 py-3 text-slate-700">{account.payment_schedule_type.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClass(account.status)}`}>
-                        {account.status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+          <div>
+            {/* Mobile Single-Row Fee Register (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {filteredAccounts.map((account) => {
+                const isPaid = Number(account.outstanding_amount) <= 0;
+                return (
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between gap-2 px-3.5 py-3 hover:bg-slate-50 transition-colors"
+                  >
+                    {/* Left: Student Name + Admission No */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0">
+                        {account.student_name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-bold text-xs text-slate-900 truncate max-w-[120px]">
+                            {account.student_name}
+                          </p>
+                          <span className="text-[9.5px] font-mono text-teal-700 bg-teal-50 px-1 py-0.2 rounded border border-teal-200/50 shrink-0 font-semibold">
+                            {account.admission_number || "ADM-000"}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                          {programmeDisplay(account)} • {sectionDisplay(account)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right: Balance Pill & 1-Tap Action Buttons */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="text-right">
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[9.5px] font-bold ${statusClass(
+                            account.status
+                          )}`}
+                        >
+                          {isPaid ? "Paid 🟢" : `${money(account.outstanding_amount)} Due`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
+                          title="View Ledger History"
                           onClick={() => void openLedgerModal(account)}
-                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-700 transition hover:bg-slate-50"
+                          className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center transition-all cursor-pointer"
                         >
-                          <ReceiptText className="h-3 w-3" />
-                          View Ledger
+                          <ReceiptText className="h-3.5 w-3.5" />
                         </button>
-                        {canRecordPayment && Number(account.outstanding_amount) > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => openPaymentModal(account)}
-                          className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-slate-800"
-                        >
-                          <CreditCard className="h-3 w-3" />
-                          Record Payment
-                        </button>
+
+                        {canRecordPayment && !isPaid && (
+                          <button
+                            type="button"
+                            title="Record Payment"
+                            onClick={() => openPaymentModal(account)}
+                            className="w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                          >
+                            <CreditCard className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+
+                        {!isPaid && (
+                          <button
+                            type="button"
+                            title="Send WhatsApp Fee Reminder"
+                            onClick={() => openReminderModal()}
+                            className="w-8 h-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                          >
+                            <WalletCards className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
-                    </td>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop 10-Column Data Table (>= 768px - PC Only) */}
+            <div className="hidden md:block max-h-[560px] overflow-auto">
+              <table className="min-w-[1440px] w-full border-collapse text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="border-b border-slate-200 px-4 py-3">Admission No</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Student</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Academic Year</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Year Level</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Programme / Stream</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Section</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Assigned</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Scholarship</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Concession</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Net Payable</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Paid</th>
+                    <th className="border-b border-slate-200 px-4 py-3 text-right">Outstanding</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Schedule</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Status</th>
+                    <th className="border-b border-slate-200 px-4 py-3">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAccounts.map((account) => (
+                    <tr key={account.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono font-bold text-teal-700">{account.admission_number ?? "-"}</td>
+                      <td className="px-4 py-3 font-bold text-slate-950">{account.student_name}</td>
+                      <td className="px-4 py-3 text-slate-700">{account.academic_year ?? "-"}</td>
+                      <td className="px-4 py-3 text-slate-700">{yearLevelDisplay(account)}</td>
+                      <td className="px-4 py-3 text-slate-700">{programmeDisplay(account)}</td>
+                      <td className="px-4 py-3 text-slate-700">{sectionDisplay(account)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{money(account.assigned_fee_amount)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{money(account.scholarship_amount)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{money(account.concession_amount)}</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">{money(account.net_payable_amount)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-700">{money(account.total_paid_amount)}</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-rose-700">{money(account.outstanding_amount)}</td>
+                      <td className="px-4 py-3 text-slate-700">{account.payment_schedule_type.replaceAll("_", " ")}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClass(account.status)}`}>
+                          {account.status.replaceAll("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void openLedgerModal(account)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            <ReceiptText className="h-3 w-3" />
+                            View Ledger
+                          </button>
+                          {canRecordPayment && Number(account.outstanding_amount) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openPaymentModal(account)}
+                            className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-slate-800"
+                          >
+                            <CreditCard className="h-3 w-3" />
+                            Record Payment
+                          </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

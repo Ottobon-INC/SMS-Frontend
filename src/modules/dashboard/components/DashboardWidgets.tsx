@@ -67,18 +67,22 @@ export function SummaryCard({ card }: { card: DashboardSummaryCard }) {
     <button
       type="button"
       onClick={() => card.route && navigate(card.route)}
-      className={`group rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-teal-200/60 ${toneClasses}`}
+      className={`group rounded-2xl border p-3 sm:p-4 text-left transition-all hover:-translate-y-0.5 hover:border-teal-200/60 h-full min-h-[105px] flex flex-col justify-between ${toneClasses}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{card.label}</p>
-          <p className="mt-1 text-xl font-extrabold text-slate-900">{content}</p>
-          {card.helper ? <p className="mt-1 text-[11px] font-medium text-slate-500">{card.helper}</p> : null}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wide text-slate-500 truncate">{card.label}</p>
+          <p className="mt-1 text-sm sm:text-lg font-extrabold text-slate-900 truncate tracking-tight" title={content}>
+            {content}
+          </p>
         </div>
-        <span className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-slate-100 transition-transform group-hover:scale-110">
-          {cardIconMap[card.key] ?? <ArrowRight className="h-4 w-4 text-slate-400" />}
+        <span className="rounded-lg bg-white p-1.5 sm:p-2 shadow-xs ring-1 ring-slate-100 transition-transform group-hover:scale-105 shrink-0">
+          {cardIconMap[card.key] ?? <ArrowRight className="h-3.5 w-3.5 text-slate-400" />}
         </span>
       </div>
+      {card.helper ? (
+        <p className="mt-1.5 text-[10px] font-medium text-slate-500 truncate">{card.helper}</p>
+      ) : null}
     </button>
   );
 }

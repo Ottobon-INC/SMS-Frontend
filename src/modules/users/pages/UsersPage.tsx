@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, CheckCircle2, X, RefreshCw, ShieldCheck, AlertCircle, Lock } from 'lucide-react';
+import { Users, UserPlus, Search, CheckCircle2, X, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 import { apiGet, apiPost } from '../../../api/client/apiClient';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 
@@ -162,7 +162,7 @@ export const UsersPage: React.FC = () => {
   return (
     <div className="min-h-full bg-slate-50 pb-20">
       {/* Hero Header */}
-      <div className="bg-slate-900 px-6 py-8 md:px-10">
+      <div className="bg-slate-900 px-4 py-6 sm:px-6 sm:py-8 md:px-10">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -228,7 +228,7 @@ export const UsersPage: React.FC = () => {
         </div>
 
         {/* Search & Filter Bar */}
-      <div className="flex justify-between items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
@@ -266,7 +266,7 @@ export const UsersPage: React.FC = () => {
           <p className="text-sm font-bold text-slate-700">No User Accounts Found</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+        <div className="w-full overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-xs">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
@@ -306,8 +306,8 @@ export const UsersPage: React.FC = () => {
 
       {/* 2-TAB CREATE USER MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full max-h-[90vh] sm:max-h-none overflow-y-auto p-6 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-teal-600" /> Create User Account

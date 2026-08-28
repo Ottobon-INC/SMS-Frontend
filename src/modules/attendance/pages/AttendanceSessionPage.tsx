@@ -341,17 +341,17 @@ export const AttendanceSessionPage: React.FC = () => {
             />
           </div>
           {isEditable && (
-            <div className="flex-shrink-0 flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-stretch sm:justify-end">
               <button
                 onClick={handleClearAll}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all shadow-sm"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm cursor-pointer"
               >
                 <Undo2 className="w-4 h-4" />
                 Clear All
               </button>
               <button
                 onClick={handleMarkAllPresent}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-sm font-semibold transition-all shadow-sm"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm cursor-pointer"
               >
                 <CheckCheck className="w-4 h-4" />
                 Mark All Present
@@ -395,7 +395,7 @@ export const AttendanceSessionPage: React.FC = () => {
       </div>
 
       {/* Sticky Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_20px_-4px_rgb(0,0,0,0.08)] z-20">
+      <div className="fixed bottom-[60px] lg:bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_20px_-4px_rgb(0,0,0,0.08)] z-30">
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           {/* Count pills */}
           <div className="flex items-center gap-2 text-sm overflow-x-auto no-scrollbar">

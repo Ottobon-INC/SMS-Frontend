@@ -103,10 +103,10 @@ export function InstitutionDashboardShellPage() {
   return (
     <div className="min-h-full bg-slate-50 pb-20">
       {/* Hero Header */}
-      <div className="bg-slate-900 px-6 py-8 md:px-10 mb-6">
+      <div className="bg-slate-900 px-4 py-6 sm:px-6 sm:py-8 md:px-10 mb-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
                 <Building2 className="w-6 h-6" />
               </div>
@@ -125,7 +125,7 @@ export function InstitutionDashboardShellPage() {
             <div className="text-right hidden sm:block">
               <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Welcome back,</p>
               <p className="text-white font-semibold text-sm mt-0.5">
-                {auth.appUser?.display_name ?? "Dean"}
+                {auth.appUser?.display_name ?? "Dean"} · {todayLabel}
               </p>
             </div>
           </div>
