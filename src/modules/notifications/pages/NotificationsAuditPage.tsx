@@ -210,7 +210,7 @@ export const NotificationsAuditPage: React.FC = () => {
       </div>
 
       {/* KPI METRIC CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           onClick={() => setStatusFilter('ALL')}
           className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-1 cursor-pointer hover:border-slate-400 transition"
@@ -301,7 +301,7 @@ export const NotificationsAuditPage: React.FC = () => {
       </div>
 
       {/* AUDIT LOGS TABLE */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="w-full overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-sm">
         {loading ? (
           <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2 text-xs font-semibold">
             <RefreshCw className="w-5 h-5 animate-spin text-teal-600" /> Loading Outbox Audit Logs...
@@ -398,8 +398,8 @@ export const NotificationsAuditPage: React.FC = () => {
 
       {/* QUICK MODAL TO UPDATE GUARDIAN MOBILE */}
       {selectedLogForUpdate && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full max-h-[90vh] sm:max-h-none overflow-y-auto p-6 space-y-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="p-2.5 bg-amber-100 text-amber-800 rounded-xl">
@@ -466,8 +466,8 @@ export const NotificationsAuditPage: React.FC = () => {
 
       {/* MESSAGE CONTENT PREVIEW MODAL */}
       {selectedLogForPreview && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] sm:max-h-none overflow-y-auto p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-100 text-emerald-800 rounded-2xl">

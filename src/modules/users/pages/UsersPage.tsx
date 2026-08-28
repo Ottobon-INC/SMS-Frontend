@@ -174,7 +174,7 @@ export const UsersPage: React.FC = () => {
       )}
 
       {/* Header Banner */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-teal-600" /> User Accounts & RBAC Governance
@@ -207,7 +207,7 @@ export const UsersPage: React.FC = () => {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex justify-between items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
@@ -245,7 +245,7 @@ export const UsersPage: React.FC = () => {
           <p className="text-sm font-bold text-slate-700">No User Accounts Found</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+        <div className="w-full overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-xs">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
@@ -285,8 +285,8 @@ export const UsersPage: React.FC = () => {
 
       {/* 2-TAB CREATE USER MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full max-h-[90vh] sm:max-h-none overflow-y-auto p-6 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-teal-600" /> Create User Account

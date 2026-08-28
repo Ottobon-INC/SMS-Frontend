@@ -81,7 +81,7 @@ export const AttendanceLandingPage: React.FC = () => {
                 {pageConfig.icon}
               </div>
               <div>
-                <div className="flex items-center gap-2.5 mb-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-2xl font-bold text-white tracking-tight">{pageConfig.heading}</h1>
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${pageConfig.badgeColor}`}>
                     {pageConfig.badge}

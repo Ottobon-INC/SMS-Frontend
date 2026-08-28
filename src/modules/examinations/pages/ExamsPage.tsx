@@ -944,7 +944,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
               </select>
             </div>
           ) : (
-            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex flex-wrap items-center gap-1.5">
               <span>🏫 Assigned Campus: {branches.find(b => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
               <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
             </div>
@@ -967,14 +967,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
               </button>
             )}
 
-            {onNavigateToMarksEntry && (
-              <button
-                onClick={() => onNavigateToMarksEntry(exams.length > 0 ? exams[0].id : undefined)}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
-              >
-                <GraduationCap className="w-4 h-4 text-teal-400" /> Enter Class Marks
-              </button>
-            )}
+
           </div>
         </div>
       </div>
@@ -1035,66 +1028,72 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   <ExamDispatchPill examId={exam.id} />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {onNavigateToMarksEntry && (
-                    <button
-                      onClick={() => onNavigateToMarksEntry(exam.id)}
-                      className="px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl font-bold text-xs flex items-center gap-1.5"
-                    >
-                      <GraduationCap className="w-4 h-4 text-teal-600" /> Enter Marks
-                    </button>
-                  )}
+                {/* Organized Action Buttons Grid */}
+                <div className="flex flex-col gap-2 pt-3 mt-3 border-t border-slate-100">
+                  {/* Primary Actions Row */}
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                    {onNavigateToMarksEntry && (
+                      <button
+                        onClick={() => onNavigateToMarksEntry(exam.id)}
+                        className="flex-1 min-w-[130px] px-3.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-98"
+                      >
+                        <GraduationCap className="w-4 h-4" /> Enter Marks
+                      </button>
+                    )}
 
+                    {(
+                      isDean ||
+                      (canPublish && (exam.scope === 'SINGLE_BRANCH' && (!exam.branchId || exam.branchId === userBranchId)))
+                    ) && (exam.status === 'SUBMITTED' || exam.status === 'DRAFT') && (
+                      <button
+                        onClick={() => {
+                          setExamToPublish(exam.id);
+                          setShowPublishModal(true);
+                        }}
+                        className="flex-1 min-w-[130px] px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-98"
+                      >
+                        <ShieldCheck className="w-4 h-4" /> Approve & Publish
+                      </button>
+                    )}
+                  </div>
 
-                  {isDean && (
-                    <button
-                      onClick={() => {
-                        setExamToExempt(exam.id);
-                        setShowExemptBranchModal(true);
-                      }}
-                      className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
-                      title="Exempt or opt-out a campus branch from this assessment"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-purple-600" /> Exempt / Opt-Out Campus
-                    </button>
-                  )}
-
-                  {(isDean || canPublish) && exam.status === 'SUBMITTED' && (
-                    <button
-                      onClick={() => {
-                        setExamToReturn(exam.id);
-                        setShowReturnModal(true);
-                      }}
-                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <FileWarning className="w-4 h-4 text-rose-600" /> Return for Correction
-                    </button>
-                  )}
-
-                  {(
-                    isDean ||
-                    (canPublish && (exam.scope === 'SINGLE_BRANCH' && (!exam.branchId || exam.branchId === userBranchId)))
-                  ) && (exam.status === 'SUBMITTED' || exam.status === 'DRAFT') && (
+                  {/* Secondary Actions Row */}
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => {
-                        setExamToPublish(exam.id);
-                        setShowPublishModal(true);
+                        setSelectedExam(exam);
+                        setShowHistoryModal(true);
                       }}
-                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
                     >
-                      <ShieldCheck className="w-4 h-4" /> Approve & Publish
+                      <History className="w-3.5 h-3.5 text-slate-500" /> History
                     </button>
-                  )}
 
-                  <button
-                    onClick={() => {
-                      setSelectedExam(exam);
-                      setShowHistoryModal(true);
-                    }}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs flex items-center gap-1 cursor-pointer"
-                  >
-                    <History className="w-4 h-4" /> History
-                  </button>
+                    {isDean && (
+                      <button
+                        onClick={() => {
+                          setExamToExempt(exam.id);
+                          setShowExemptBranchModal(true);
+                        }}
+                        className="flex-1 py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                        title="Exempt or opt-out a campus branch from this assessment"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-purple-600" /> Opt-Out Campus
+                      </button>
+                    )}
+
+                    {(isDean || canPublish) && exam.status === 'SUBMITTED' && (
+                      <button
+                        onClick={() => {
+                          setExamToReturn(exam.id);
+                          setShowReturnModal(true);
+                        }}
+                        className="flex-1 py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                      >
+                        <FileWarning className="w-3.5 h-3.5 text-rose-600" /> Return
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
