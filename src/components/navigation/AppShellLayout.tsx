@@ -109,7 +109,17 @@ export function AppShellLayout() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", overflow: "hidden", fontFamily: "'Inter', system-ui, -apple-system, sans-serif", background: "#0d1117" }}>
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      display: "flex",
+      flexDirection: "column",
+      height: "100dvh",
+      width: "100vw",
+      overflow: "hidden",
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      background: "#0d1117"
+    }}>
 
       {/* ─── Row 1: Mobile & Tablet Top Header Bar (< 1024px) ─── */}
       {isMobileOrTablet && (
@@ -410,8 +420,9 @@ export function AppShellLayout() {
             minWidth: 0,
             marginLeft: isMobileOrTablet ? 0 : (expanded ? EXPANDED : COLLAPSED) + 20,
             overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
             background: "#f8fafc",
-            paddingBottom: isMobileOrTablet ? 24 : 0,
+            paddingBottom: isMobileOrTablet ? "calc(88px + env(safe-area-inset-bottom, 0px))" : 0,
           }}
         >
           <GlobalDispatchBanner />
@@ -424,14 +435,19 @@ export function AppShellLayout() {
         <nav
           style={{
             height: 60,
-            flexShrink: 0,
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
             zIndex: 40,
             background: "#0d1117",
             borderTop: "1px solid #21262d",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-around",
-            padding: "0 4px",
+            padding: "0 4px env(safe-area-inset-bottom, 0px)",
+            boxSizing: "content-box",
+            boxShadow: "0 -8px 24px rgba(0,0,0,0.28)",
           }}
         >
           {bottomTabs.map((tab) => {
