@@ -64,7 +64,7 @@ export function PortalSelectionPage() {
           <span className="landing-brand-mark">
             <GraduationCap size={25} strokeWidth={2.4} />
           </span>
-          <span>Student Operations Hub</span>
+          <span>Student Management System</span>
         </Link>
         <a className="landing-demo-link" href="#portals">
           <span>Live Demo</span>

@@ -34,6 +34,14 @@ const ROUTE_ICONS: Record<string, React.ElementType> = {
   "/whatsapp-simulator": MessageSquare,
 };
 
+const PORTAL_CAPTIONS: Record<string, string> = {
+  INSTITUTION_ADMIN: "Dean Portal",
+  BRANCH_ADMIN: "Principal Portal",
+  OFFICE_STAFF: "Staff Portal",
+  PARENT_GUARDIAN: "Parent Portal",
+  SAAS_SUPER_ADMIN: "Platform Portal",
+};
+
 const COLLAPSED = 56;
 const EXPANDED  = 256;
 const EASE      = "cubic-bezier(0.25, 1, 0.5, 1)";
@@ -69,6 +77,7 @@ export function AppShellLayout() {
   const initials = auth.appUser?.display_name?.slice(0, 2).toUpperCase() ?? "US";
   const activeCtx = auth.availableContexts.find((c) => c.assignment_id === auth.activeContext?.assignment_id);
   const locationLabel = activeCtx?.branch?.name ?? activeCtx?.tenant?.name ?? "Platform";
+  const portalCaption = PORTAL_CAPTIONS[auth.activeContext?.role_codes[0] ?? ""] ?? "Application Portal";
 
   // Padding each item gets on left/right when expanded vs collapsed
   const itemPx = expanded ? 10 : 0;
@@ -119,8 +128,8 @@ export function AppShellLayout() {
             overflow: "hidden", 
             whiteSpace: "nowrap" 
           }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#e6edf3", letterSpacing: "-0.02em", lineHeight: "17px" }}>Student Management</p>
-            <p style={{ fontSize: 10, color: "#484f58", lineHeight: "14px", marginTop: 1 }}>School Portal</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#e6edf3", letterSpacing: "-0.02em", lineHeight: "17px" }}>Student Management System</p>
+            <p style={{ fontSize: 10, color: "#484f58", lineHeight: "14px", marginTop: 1 }}>{portalCaption}</p>
           </div>
         </div>
 
