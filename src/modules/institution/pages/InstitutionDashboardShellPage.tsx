@@ -101,40 +101,55 @@ export function InstitutionDashboardShellPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl pb-12">
-      {/* 1. Institution Overview Header */}
-      <section id="overview" className="mb-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-teal-700">Dean / Institution Admin</p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 md:text-4xl">
-                Institution Overview
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-                Monitoring global operations and performance across all authorized branches.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="font-bold text-slate-900">{auth.appUser?.display_name ?? "Dean"}</span>
-              <span>{todayLabel}</span>
-              <div className="mt-1 flex items-center justify-between gap-4 border-t border-slate-200 pt-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Updated {formatDate(dashboard.generated_at)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void loadDashboard()}
-                  className="inline-flex items-center gap-1 rounded bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 transition-colors hover:bg-slate-300"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  REFRESH
-                </button>
+    <div className="min-h-full bg-slate-50 pb-20">
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 py-8 md:px-10 mb-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <Building2 className="w-6 h-6" />
               </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Institution Overview</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30">
+                    Dean
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  Monitoring global operations and performance across all authorized branches.
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Welcome back,</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {auth.appUser?.display_name ?? "Dean"}
+              </p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-6">
+        {/* Actions Bar */}
+        <div className="flex justify-end items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Updated {formatDate(dashboard.generated_at)}
+            </span>
+            <button
+              type="button"
+              onClick={() => void loadDashboard()}
+              className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+              title="Refresh Dashboard"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
       <div className="grid gap-6">
         {/* KPI STRIP */}
@@ -305,5 +320,6 @@ export function InstitutionDashboardShellPage() {
 
       </div>
     </div>
+  </div>
   );
 }

@@ -103,54 +103,64 @@ export function DeanBranchViewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl pb-12">
+    <div className="min-h-full bg-slate-50 pb-20">
       {/* Sticky Breadcrumb */}
-      <div className="sticky top-0 z-10 -mx-4 mb-6 flex items-center gap-2 border-b border-slate-200/50 bg-slate-50/90 px-4 py-3 text-sm font-medium text-slate-500 shadow-sm backdrop-blur-md sm:-mx-6 sm:px-6 md:-mx-8 md:px-8">
+      <div className="sticky top-0 z-10 bg-slate-900/95 border-b border-slate-800 px-6 py-3 text-sm font-medium text-slate-400 shadow-sm backdrop-blur-md flex items-center gap-2">
         <Link
           to="/dashboard/institution"
-          className="transition-colors hover:text-teal-700 hover:underline"
+          className="transition-colors hover:text-white hover:underline"
         >
           Institution Overview
         </Link>
-        <span className="text-slate-300">/</span>
-        <span className="font-bold text-slate-900">
+        <span className="text-slate-600">/</span>
+        <span className="font-bold text-white">
           {dashboard.scope.branch_name}
         </span>
       </div>
 
-      {/* 1. Branch Overview Header */}
-      <section className="mb-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-teal-700">
-                Branch Overview
-              </p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 md:text-4xl">
-                {dashboard.scope.branch_name}
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-                Monitoring branch operations and current status.
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Updated {formatDate(dashboard.generated_at)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void loadDashboard()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-600 transition-colors hover:bg-slate-300"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  REFRESH
-                </button>
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 pb-8 pt-4 md:px-10 mb-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <LayoutDashboard className="w-6 h-6" />
               </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">{dashboard.scope.branch_name}</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
+                    Branch Overview
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  Monitoring branch operations and current status.
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Updated</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {formatDate(dashboard.generated_at)}
+              </p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-6">
+        {/* Actions Bar */}
+        <div className="flex justify-end items-center">
+          <button
+            type="button"
+            onClick={() => void loadDashboard()}
+            className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+            title="Refresh Dashboard"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
 
       <div className="grid gap-6">
         {/* KPI STRIP */}
@@ -253,5 +263,6 @@ export function DeanBranchViewPage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { examinationsApi } from '../api/examinationsApi';
 import { Exam, ExamSubject, Subject, Programme, Branch } from '../types';
-import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { GraduationCap, ShieldCheck, History, Plus, Calendar, CheckCircle2, X, Filter, AlertTriangle, FileWarning, XCircle, Loader2, ArrowLeft, FileText } from 'lucide-react';
 import { useAuth } from '../../authentication/providers/AuthProvider';
 import { useNotificationProgress } from '../../notifications/hooks/useNotificationProgress';
 
@@ -904,51 +904,77 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
   }
 
   return (
-    <div className="space-y-6 p-6">
-      {notification && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{notification}</span>
+    <div className="min-h-full bg-slate-50 pb-20">
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 py-8 md:px-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Examinations</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-500/20 text-rose-300 border-rose-500/30">
+                    Total: {exams.length}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  Configure audience scopes, custom subject max marks, enter class mark matrices, and publish report cards.
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Today</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
           </div>
-          <button onClick={() => setNotification(null)} className="text-emerald-600 hover:text-emerald-800">
-            <X className="w-4 h-4" />
-          </button>
         </div>
-      )}
+      </div>
 
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Examinations & Result Publishing</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Configure audience scopes, custom subject max marks, enter class mark matrices, and publish report cards.
-          </p>
-        </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
+        {notification && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{notification}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-emerald-600 hover:text-emerald-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-          {isDean ? (
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={selectedBranchFilter}
-                onChange={(e) => setSelectedBranchFilter(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="ALL">All Campus Branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <span>🏫 Assigned Campus: {branches.find(b => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
-              <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
-            </div>
-          )}
+        {/* Actions Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            {isDean ? (
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <select
+                  value={selectedBranchFilter}
+                  onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Campus Branches</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 shadow-sm">
+                <span>🏫 Assigned Campus: {branches.find(b => b.id === userBranchId)?.name || userBranchName || 'Assigned Campus'}</span>
+                <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">Locked</span>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {(isDean || canPublish) && (
@@ -961,7 +987,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   setOverlapError(null);
                   setViewMode('create');
                 }}
-                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Create Assessment
               </button>
@@ -970,14 +996,13 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
             {onNavigateToMarksEntry && (
               <button
                 onClick={() => onNavigateToMarksEntry(exams.length > 0 ? exams[0].id : undefined)}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-2 transition-all cursor-pointer"
               >
                 <GraduationCap className="w-4 h-4 text-teal-400" /> Enter Class Marks
               </button>
             )}
           </div>
         </div>
-      </div>
 
       {/* Examinations List */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1553,6 +1578,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
         </div>
       )}
     </div>
+  </div>
   );
 };
 interface AcademicYear {

@@ -100,31 +100,47 @@ export function DashboardShellPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl pb-12">
-      {/* HEADER */}
-      <section id="overview" className="mb-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Office Staff Dashboard</p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 md:text-4xl">
-                Daily Branch Operations
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">
-                {dashboard.scope.branch_name ?? "Current branch"} operations for students, imports, fees,
-                attendance and examinations.
-              </p>
+    <div className="min-h-full bg-slate-50 pb-20">
+      {/* Hero Header */}
+      <div className="bg-slate-900 px-6 py-8 md:px-10 mb-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                <LayoutDashboard className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Daily Branch Operations</h1>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
+                    Office Staff
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  {dashboard.scope.branch_name ?? "Current branch"} operations for students, imports, fees, attendance and examinations.
+                </p>
+              </div>
             </div>
-            <div className="flex shrink-0 flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="font-bold text-slate-900">{auth.appUser?.display_name ?? "Office Staff"}</span>
-              <span>{todayLabel}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Updated {formatDate(dashboard.generated_at)}
-              </span>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Welcome back,</p>
+              <p className="text-white font-semibold text-sm mt-0.5">
+                {auth.appUser?.display_name ?? "Office Staff"}
+              </p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-6">
+        {/* Actions Bar */}
+        <div className="flex justify-end items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Updated {formatDate(dashboard.generated_at)}
+            </span>
+          </div>
+        </div>
 
       <div className="grid gap-6">
         {/* KPI STRIP */}
@@ -255,5 +271,6 @@ export function DashboardShellPage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }
