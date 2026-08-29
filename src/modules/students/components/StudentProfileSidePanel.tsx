@@ -73,7 +73,7 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
               <FileText className="w-4 h-4" /> Academic Details
             </h3>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
               <Detail label="Programme" value={formatCellValue(programmeDisplay)} />
               <Detail label="Section" value={formatCellValue(sectionDisplay)} />
               <Detail label="Roll Number" value={formatCellValue(rollNo)} />
@@ -88,7 +88,7 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
               <User className="w-4 h-4" /> Personal Information
             </h3>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
               <Detail label="Gender" value={formatCellValue(student.gender)} />
               <Detail label="Date of Birth" value={formatDate(student.dateOfBirth ?? student.dob)} />
               <Detail label="Created At" value={formatDate(student.studentCreatedAt)} />
@@ -101,16 +101,14 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
               <Phone className="w-4 h-4" /> Contact & Guardian
             </h3>
             <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Detail label="Student Mobile" value={formatCellValue(student.studentMobile)} />
                 <Detail label="Student Email" value={formatCellValue(student.studentEmail)} />
               </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                   <Detail label="Guardian Name" value={formatCellValue(guardianName)} />
                   <Detail label="Relationship" value={formatCellValue(student.guardianRelationship ?? student.guardian_relationship)} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
                   <Detail label="Guardian Phone" value={formatCellValue(guardianPhone)} />
                   <Detail label="Guardian Email" value={formatCellValue(student.guardianEmail)} />
                 </div>
@@ -126,8 +124,8 @@ export const StudentProfileSidePanel: React.FC<StudentProfileSidePanelProps> = (
 };
 
 const Detail: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div>
+  <div className="min-w-0">
     <p className="text-xs text-slate-500 mb-0.5">{label}</p>
-    <p className="font-semibold text-slate-900">{value}</p>
+    <p className="font-semibold text-slate-900 break-words whitespace-normal leading-snug">{value}</p>
   </div>
 );

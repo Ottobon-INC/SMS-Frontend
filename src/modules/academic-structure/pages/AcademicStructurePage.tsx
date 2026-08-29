@@ -815,13 +815,15 @@ export function AcademicStructurePage() {
                             {programme.coachingTrack}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => openEditProgramme(programme)}
-                          className="ml-2 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 transition"
-                        >
-                          Edit
-                        </button>
+                        {canManageAcademicStructure && (
+                          <button
+                            type="button"
+                            onClick={() => openEditProgramme(programme)}
+                            className="ml-2 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 transition"
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600 shrink-0">Both Years</span>
                     </div>

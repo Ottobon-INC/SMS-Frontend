@@ -40,6 +40,36 @@ function programmeLabel(programme: Programme): string {
   return programme.displayLabel || programme.name || programme.code;
 }
 
+function MarksSummaryBadges({ summary }: { summary?: Exam['marksSummary'] }) {
+  if (!summary || summary.total === 0) return null;
+
+  const badges = [
+    { key: 'draft', label: 'Draft', value: summary.draft, className: 'bg-blue-50 text-blue-800 border-blue-200' },
+    { key: 'submitted', label: 'Submitted', value: summary.submitted, className: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    { key: 'published', label: 'Published', value: summary.published, className: 'bg-teal-50 text-teal-800 border-teal-200' },
+    { key: 'pending', label: 'Pending', value: summary.pending, className: 'bg-amber-50 text-amber-800 border-amber-200' },
+    { key: 'exempted', label: 'Exempted', value: summary.exempted, className: 'bg-slate-50 text-slate-700 border-slate-200' },
+  ].filter((badge) => badge.value > 0);
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Marks</span>
+      {badges.map((badge) => (
+        <span
+          key={badge.key}
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${badge.className}`}
+          title={`${badge.value} of ${summary.total} section${summary.total === 1 ? '' : 's'} ${badge.label.toLowerCase()}`}
+        >
+          {badge.label}
+          <span className="rounded-full bg-white/70 px-1 font-black">{badge.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) => void }> = ({
   onNavigateToMarksEntry,
 }) => {
@@ -205,8 +235,6 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
 
   // Simulated Dean role
   const canPublishOrDean = true;
-  void selectedExam;
-  void showHistoryModal;
   void canPublishOrDean;
 
   const loadExams = async (showLoadingSpinner = true) => {
@@ -1042,6 +1070,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                   <p className="text-slate-500 text-xs">
                     Academic Year: <strong className="text-slate-800 font-semibold">{academicYears.find((y) => y.id === exam.academicYearId)?.name || '2026–2027'}</strong> • Type: {exam.type} • Date: {exam.examDate}
                   </p>
+                  <MarksSummaryBadges summary={exam.marksSummary} />
                   {exam.excludedBranchIds && exam.excludedBranchIds.length > 0 && (
                     <div className="mt-1.5 p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-900 text-[11px] font-semibold flex items-center gap-1.5">
                       <span>🚫 <strong>Campus Exemptions:</strong> {exam.excludedBranchIds.map(id => {
@@ -1069,7 +1098,7 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                         onClick={() => onNavigateToMarksEntry(exam.id)}
                         className="flex-1 min-w-[130px] px-3.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-98"
                       >
-                        <GraduationCap className="w-4 h-4" /> Enter Marks
+                        <GraduationCap className="w-4 h-4" /> Enter / Review Marks
                       </button>
                     )}
 
@@ -1459,6 +1488,81 @@ export const ExamsPage: React.FC<{ onNavigateToMarksEntry?: (examId?: string) =>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY MODAL */}
+      {showHistoryModal && selectedExam && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <History className="w-5 h-5 text-slate-500" /> Assessment History
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">{selectedExam.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHistoryModal(false);
+                  setSelectedExam(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">Current Status</span>
+                <span className="font-extrabold text-slate-900">{selectedExam.status.replace(/_/g, ' ')}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">Exam Date</span>
+                <span className="font-semibold text-slate-800">{selectedExam.examDate}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">Created At</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedExam.createdAt ? new Date(selectedExam.createdAt).toLocaleString("en-IN") : "-"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">Last Updated</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedExam.updatedAt ? new Date(selectedExam.updatedAt).toLocaleString("en-IN") : "-"}
+                </span>
+              </div>
+              {selectedExam.publishedAt && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-slate-500 uppercase tracking-wider">Published At</span>
+                  <span className="font-semibold text-slate-800">{new Date(selectedExam.publishedAt).toLocaleString("en-IN")}</span>
+                </div>
+              )}
+            </div>
+
+            {selectedExam.returnReason && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+                <p className="font-bold text-rose-900 mb-1">Return Note</p>
+                <p className="leading-relaxed">{selectedExam.returnReason}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHistoryModal(false);
+                  setSelectedExam(null);
+                }}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

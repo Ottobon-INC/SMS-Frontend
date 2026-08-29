@@ -38,6 +38,7 @@ type ApiExam = {
   exam_date: string;
   marks_entry_deadline?: string;
   status: Exam['status'];
+  marks_summary?: Exam['marksSummary'];
   return_reason?: string;
   published_at?: string;
   published_by?: string;
@@ -108,6 +109,7 @@ function mapExamFromApi(exam: ApiExam): Exam {
     examDate: exam.exam_date,
     marksEntryDeadline: exam.marks_entry_deadline,
     status: exam.status,
+    marksSummary: exam.marks_summary,
     returnReason: exam.return_reason,
     publishedAt: exam.published_at,
     publishedBy: exam.published_by,

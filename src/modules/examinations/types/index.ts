@@ -14,6 +14,14 @@ export interface Exam {
   examDate: string;
   marksEntryDeadline?: string;
   status: 'DRAFT' | 'SUBMITTED' | 'RETURNED_FOR_CORRECTION' | 'PUBLISHED';
+  marksSummary?: {
+    pending: number;
+    draft: number;
+    submitted: number;
+    published: number;
+    exempted: number;
+    total: number;
+  };
   returnReason?: string;
   publishedAt?: string;
   publishedBy?: string;
